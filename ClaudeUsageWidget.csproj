@@ -9,7 +9,7 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <AssemblyName>ClaudeUsageWidget</AssemblyName>
     <RootNamespace>ClaudeUsageWidget</RootNamespace>
-    <Version>0.3.0</Version>
+    <Version>0.4.0</Version>
 
     <!-- NativeAOT: no WinForms/WPF, raw Win32. Buys a ~4 MB self-contained exe. -->
     <PublishAot>true</PublishAot>
