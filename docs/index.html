@@ -1,0 +1,656 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>claude-usage-widget — how much of your week is left</title>
+<meta name="description" content="A Windows desktop panel and taskbar badge for your Claude subscription limits. Reads them from the Claude Code CLI: no browser session, no scraped credentials, no tokens spent.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wdth,wght@12..96,75..100,500;12..96,75..100,700;12..96,75..100,800&family=Martian+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    /* A Windows 11 light surface, not paper: cool, faintly blue, very slightly layered. */
+    --ground:      #edf0f4;
+    --ground-wash: #e2e8f0;
+    --raised:      #ffffff;
+    --ink:         #14171c;
+    --ink-soft:    #495159;
+    --ink-faint:   #79828d;
+    --rule:        #d4dbe3;
+
+    /* The widget's own dark. It is the one dark object on this page. */
+    --slab:        #17171a;
+    --slab-rule:   #26262c;
+    --slab-ink:    #ececee;
+    --slab-soft:   #86868f;
+    --slab-faint:  #6e6e78;
+    --slab-track:  #2e2e36;
+
+    /* Not an accent — a three-state system. The product means something by each one. */
+    --ok:    #1e9e5a;
+    --warn:  #c77a00;
+    --crit:  #d13438;
+    /* On the dark slab the same three states need more light to hold up. */
+    --ok-lit:   #62cb82;
+    --warn-lit: #ffb02e;
+    --crit-lit: #ff6b6b;
+
+    --link: #0067c0;
+
+    --display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+    --body: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif;
+    --mono: "Martian Mono", ui-monospace, Consolas, monospace;
+
+    --wrap: 66rem;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ground:      #0e1116;
+      --ground-wash: #131820;
+      --raised:      #171c23;
+      --ink:         #e6eaf0;
+      --ink-soft:    #a4aeba;
+      --ink-faint:   #79838f;
+      --rule:        #232b35;
+
+      --ok:   #4cba7b;
+      --warn: #e0a03a;
+      --crit: #ef6a6e;
+      --link: #6cb4f5;
+    }
+  }
+
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+  }
+
+  body {
+    margin: 0;
+    font-family: var(--body);
+    font-size: 16px;
+    line-height: 1.65;
+    color: var(--ink);
+    background:
+      radial-gradient(120% 80% at 88% -10%, var(--ground-wash), transparent 62%),
+      var(--ground);
+    background-attachment: fixed;
+  }
+
+  .wrap { max-width: var(--wrap); margin: 0 auto; padding: 0 1.5rem; }
+
+  a { color: inherit; text-underline-offset: 3px; text-decoration-thickness: 1px; }
+  a:focus-visible, button:focus-visible, input:focus-visible {
+    outline: 2px solid var(--link);
+    outline-offset: 3px;
+    border-radius: 2px;
+  }
+
+  .label {
+    font-family: var(--mono);
+    font-size: .62rem;
+    font-weight: 600;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+  }
+
+  /* ---- masthead ---- */
+
+  .masthead {
+    display: flex; align-items: baseline; justify-content: space-between;
+    gap: 1rem; flex-wrap: wrap;
+    padding: 1.15rem 0;
+    border-bottom: 1px solid var(--rule);
+  }
+  .wordmark {
+    margin: 0;
+    font-family: var(--mono);
+    font-size: .82rem; font-weight: 600; letter-spacing: -.02em;
+  }
+  .masthead nav { display: flex; gap: 1.15rem; }
+  .masthead nav a {
+    font-family: var(--mono); font-size: .68rem; letter-spacing: .04em;
+    text-decoration: none; color: var(--ink-soft);
+  }
+  .masthead nav a:hover { color: var(--ink); text-decoration: underline; }
+
+  /* ---- hero ---- */
+
+  .hero {
+    display: grid; gap: 3rem;
+    grid-template-columns: minmax(0, 1fr);
+    padding: 4.5rem 0 4rem;
+  }
+  @media (min-width: 62rem) {
+    .hero {
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 4.5rem; align-items: start;
+      padding-top: 5.5rem;
+    }
+  }
+
+  h1 {
+    margin: .75rem 0 1.25rem;
+    font-family: var(--display);
+    font-weight: 800;
+    font-size: clamp(2.6rem, 6.2vw, 4.15rem);
+    line-height: .98;
+    letter-spacing: -.035em;
+    font-variation-settings: "wdth" 92;
+    max-width: 13ch;
+  }
+  h1 em { font-style: normal; color: var(--ink-faint); }
+
+  .thesis {
+    margin: 0 0 2rem;
+    font-size: 1.08rem;
+    color: var(--ink-soft);
+    max-width: 42ch;
+  }
+  .thesis strong { color: var(--ink); font-weight: 600; }
+
+  .actions { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; margin-bottom: 1.75rem; }
+  .download {
+    display: inline-flex; align-items: baseline; gap: .6rem;
+    padding: .7rem 1.15rem;
+    border: 0; border-radius: 6px;
+    background: var(--ink); color: var(--ground);
+    font-family: var(--mono); font-size: .78rem; font-weight: 600; letter-spacing: .02em;
+    text-decoration: none;
+    transition: transform .12s ease, opacity .12s ease;
+  }
+  .download:hover { transform: translateY(-1px); opacity: .9; }
+  .download .size { font-weight: 400; opacity: .6; }
+  .secondary {
+    font-family: var(--mono); font-size: .74rem;
+    color: var(--ink-soft); text-decoration-color: var(--rule);
+  }
+  .secondary:hover { color: var(--ink); }
+
+  .specs { display: flex; flex-wrap: wrap; gap: .4rem 1.5rem; padding: 0; margin: 0; list-style: none; }
+  .specs li { font-family: var(--mono); font-size: .68rem; color: var(--ink-faint); }
+  .specs b { color: var(--ink-soft); font-weight: 600; }
+
+  /* ---- the slab: a faithful replica of the panel, at its real 330px ---- */
+
+  .stage { display: grid; gap: 1rem; justify-items: stretch; }
+  @media (min-width: 62rem) { .stage { width: 22rem; } }
+
+  .panel {
+    background: var(--slab);
+    border-radius: 8px;
+    padding: 0 0 .9rem;
+    color: var(--slab-ink);
+    box-shadow: 0 18px 40px -18px rgba(11, 18, 30, .55), 0 2px 6px rgba(11, 18, 30, .18);
+    font-family: "Segoe UI", system-ui, sans-serif;
+    font-size: 13px; line-height: 1.4;
+  }
+  .panel-bar { display: flex; justify-content: flex-end; height: 26px; }
+  .panel-bar span {
+    width: 32px; display: grid; place-items: center;
+    color: #9c9ca6; font-size: 12px; line-height: 1;
+  }
+  .panel-bar span:last-child { border-top-right-radius: 8px; }
+  .panel-body { padding: 0 16px; }
+
+  .acct + .acct { border-top: 1px solid var(--slab-rule); margin-top: 14px; padding-top: 14px; }
+  .acct-head { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; }
+  .acct-name { font-size: 15px; font-weight: 600; }
+  .acct-pct { font-family: var(--mono); font-size: 14px; font-weight: 600; }
+  .acct-mail { color: var(--slab-soft); font-size: 12px; margin-bottom: 8px; }
+  .acct-reset { color: var(--slab-faint); font-size: 12px; margin-top: 2px; }
+
+  .row { display: grid; grid-template-columns: 48px 1fr 44px; align-items: center; gap: 6px; height: 24px; }
+  .row-label { color: #a8a8b0; font-size: 12px; }
+  .track { height: 8px; border-radius: 4px; background: var(--slab-track); overflow: hidden; }
+  .fill {
+    /* Inline by default, and width does nothing to an inline box. */
+    display: block;
+    height: 100%; border-radius: 4px;
+    width: 0;
+    transition: width .9s cubic-bezier(.22, .8, .28, 1), background-color .25s linear;
+  }
+  .row-pct { font-family: var(--mono); font-size: 12px; font-weight: 600; text-align: right; }
+
+  /* ---- the taskbar replica ---- */
+
+  .taskbar {
+    display: flex; align-items: center; gap: .55rem;
+    padding: .5rem .8rem;
+    background: var(--raised);
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+  }
+  .badge {
+    width: 26px; height: 26px; border-radius: 4px;
+    display: grid; place-items: center;
+    font-family: var(--mono); font-size: 11px; font-weight: 600; color: #101014;
+    transition: background-color .25s linear;
+  }
+  .taskbar-name { font-size: .8rem; color: var(--ink-soft); }
+  .taskbar-progress { width: 88px; margin-left: auto; height: 3px; border-radius: 2px; background: var(--rule); overflow: hidden; }
+  .taskbar-progress i { display: block; height: 100%; width: 0; transition: width .9s cubic-bezier(.22, .8, .28, 1), background-color .25s linear; }
+
+  /* ---- the signature control ---- */
+
+  .demo { display: grid; gap: .5rem; padding: .1rem .15rem 0; }
+  .demo-head { display: flex; justify-content: space-between; align-items: baseline; gap: .75rem; }
+  .demo output {
+    font-family: var(--mono); font-size: .68rem; color: var(--ink-soft); font-weight: 600;
+    white-space: nowrap;
+  }
+  input[type="range"] {
+    -webkit-appearance: none; appearance: none;
+    width: 100%; height: 20px; margin: 0; background: transparent; cursor: ew-resize;
+  }
+  input[type="range"]::-webkit-slider-runnable-track {
+    height: 3px; border-radius: 2px; background: var(--rule);
+  }
+  input[type="range"]::-moz-range-track { height: 3px; border-radius: 2px; background: var(--rule); }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none;
+    width: 14px; height: 14px; margin-top: -5.5px;
+    border: 0; border-radius: 50%;
+    background: var(--ink);
+  }
+  input[type="range"]::-moz-range-thumb {
+    width: 14px; height: 14px; border: 0; border-radius: 50%; background: var(--ink);
+  }
+
+  /* ---- sections ---- */
+
+  section { padding: 3.75rem 0; border-top: 1px solid var(--rule); }
+  .section-head { max-width: 46ch; margin-bottom: 2.25rem; }
+  h2 {
+    margin: .55rem 0 .75rem;
+    font-family: var(--display); font-weight: 700;
+    font-size: clamp(1.55rem, 3.1vw, 2.15rem);
+    line-height: 1.08; letter-spacing: -.028em;
+    font-variation-settings: "wdth" 94;
+  }
+  .section-head p { margin: 0; color: var(--ink-soft); }
+
+  pre {
+    margin: 0;
+    padding: 1rem 1.15rem;
+    background: var(--slab); color: var(--slab-ink);
+    border-radius: 8px;
+    overflow-x: auto;
+    font-family: var(--mono); font-size: .72rem; line-height: 1.75;
+  }
+  pre .c { color: var(--slab-faint); }
+  pre .g { color: var(--ok-lit); }
+  code {
+    font-family: var(--mono); font-size: .84em;
+    background: var(--raised); border: 1px solid var(--rule);
+    border-radius: 4px; padding: .08em .34em;
+  }
+
+  .grid { display: grid; gap: 1.5rem; grid-template-columns: minmax(0, 1fr); }
+  @media (min-width: 46rem) { .grid.two { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @media (min-width: 52rem) { .grid.three { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+
+  .card {
+    padding: 1.4rem 1.5rem;
+    background: var(--raised);
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+  }
+  .card h3 { margin: .5rem 0 .5rem; font-size: 1rem; font-weight: 600; letter-spacing: -.01em; }
+  .card p { margin: 0; color: var(--ink-soft); font-size: .93rem; }
+  .card p + p { margin-top: .7rem; }
+
+  /* State dots carry the product's own vocabulary into the page's structure. */
+  .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: .5rem; vertical-align: middle; }
+  .dot.ok { background: var(--ok); }
+  .dot.warn { background: var(--warn); }
+  .dot.crit { background: var(--crit); }
+
+  ol.steps { counter-reset: step; list-style: none; margin: 0; padding: 0; display: grid; gap: 1.75rem; }
+  ol.steps > li { counter-increment: step; display: grid; gap: .6rem; }
+  ol.steps > li::before {
+    content: counter(step, decimal-leading-zero);
+    font-family: var(--mono); font-size: .62rem; font-weight: 600;
+    letter-spacing: .1em; color: var(--ink-faint);
+  }
+  ol.steps h3 { margin: 0; font-size: 1.02rem; font-weight: 600; letter-spacing: -.01em; }
+  ol.steps p { margin: 0; color: var(--ink-soft); font-size: .93rem; max-width: 56ch; }
+
+  .limits { margin: 0; padding: 0; list-style: none; display: grid; gap: 1.1rem; }
+  .limits li { display: grid; gap: .2rem; padding-left: 1.15rem; position: relative; max-width: 62ch; }
+  .limits li::before {
+    content: ""; position: absolute; left: 0; top: .62em;
+    width: 7px; height: 7px; border-radius: 50%; background: var(--warn);
+  }
+  .limits b { font-weight: 600; }
+  .limits span { color: var(--ink-soft); font-size: .93rem; }
+
+  footer {
+    border-top: 1px solid var(--rule);
+    padding: 2.25rem 0 3rem;
+    display: flex; justify-content: space-between; gap: 1rem; flex-wrap: wrap;
+    font-family: var(--mono); font-size: .66rem; color: var(--ink-faint);
+  }
+  footer a { color: var(--ink-soft); }
+
+  /* Load-in: the bars fill once, the way they do when the widget first polls. */
+  @keyframes rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+  .stage { animation: rise .6s cubic-bezier(.22, .8, .28, 1) both; }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header class="masthead">
+    <p class="wordmark">claude-usage-widget</p>
+    <nav>
+      <a href="#how">How it reads</a>
+      <a href="#accounts">Accounts</a>
+      <a href="#install">Install</a>
+      <a href="https://github.com/simoneb/claude-usage-widget">GitHub</a>
+    </nav>
+  </header>
+
+  <div class="hero">
+    <div>
+      <p class="label">Windows · one file · no runtime</p>
+      <h1>How much of your week <em>is left.</em></h1>
+      <p class="thesis">
+        A desktop panel and a taskbar badge for your Claude subscription limits.
+        It gets the numbers by asking the Claude Code CLI — <strong>no browser session,
+        no credentials read, no tokens spent.</strong>
+      </p>
+
+      <div class="actions">
+        <a class="download" href="https://github.com/simoneb/claude-usage-widget/releases/latest">
+          Download for Windows <span class="size">2.3 MB</span>
+        </a>
+        <a class="secondary" href="https://github.com/simoneb/claude-usage-widget">Read the source</a>
+      </div>
+
+      <ul class="specs">
+        <li><b>17 MB</b> resident</li>
+        <li><b>0</b> tokens per poll</li>
+        <li><b>NativeAOT</b> · raw Win32</li>
+      </ul>
+    </div>
+
+    <div class="stage">
+      <!-- The panel, at the width it actually renders. -->
+      <div class="panel">
+        <div class="panel-bar" aria-hidden="true"><span>&#8212;</span><span>&#10005;</span></div>
+        <div class="panel-body">
+          <div class="acct">
+            <div class="acct-head">
+              <span class="acct-name">work</span>
+              <span class="acct-pct" id="headline">94%</span>
+            </div>
+            <div class="acct-mail">you@company.com</div>
+            <div class="row">
+              <span class="row-label">session</span>
+              <span class="track"><i class="fill" data-fill="4"></i></span>
+              <span class="row-pct">4%</span>
+            </div>
+            <div class="row">
+              <span class="row-label">week</span>
+              <span class="track"><i class="fill" id="weekFill"></i></span>
+              <span class="row-pct" id="weekPct">94%</span>
+            </div>
+            <div class="acct-reset">resets Sat, 11:59am</div>
+          </div>
+
+          <div class="acct">
+            <div class="acct-head">
+              <span class="acct-name">personal</span>
+              <span class="acct-pct" style="color: var(--ok-lit)">31%</span>
+            </div>
+            <div class="acct-mail">you@gmail.com</div>
+            <div class="row">
+              <span class="row-label">session</span>
+              <span class="track"><i class="fill" data-fill="12"></i></span>
+              <span class="row-pct" style="color: var(--ok-lit)">12%</span>
+            </div>
+            <div class="row">
+              <span class="row-label">week</span>
+              <span class="track"><i class="fill" data-fill="31"></i></span>
+              <span class="row-pct" style="color: var(--ok-lit)">31%</span>
+            </div>
+            <div class="acct-reset">resets Thu, 8:59pm</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Minimised, the taskbar button carries the same number. -->
+      <div class="taskbar">
+        <span class="badge" id="badge">94</span>
+        <span class="taskbar-name">Claude Usage</span>
+        <span class="taskbar-progress"><i id="taskFill"></i></span>
+      </div>
+
+      <div class="demo">
+        <div class="demo-head">
+          <label class="label" for="pct">Thresholds</label>
+          <output id="readout" for="pct">94% · out of room</output>
+        </div>
+        <input type="range" id="pct" min="0" max="100" value="94" step="1">
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="wrap">
+
+  <section id="how">
+    <div class="section-head">
+      <p class="label">Where the number comes from</p>
+      <h2>It asks the CLI you already trust.</h2>
+      <p>
+        Every tool that shows this number has to get it from somewhere. Most reach for a
+        browser session. This one runs a command.
+      </p>
+    </div>
+
+    <pre><span class="c">$</span> claude -p "/usage" --output-format json
+
+<span class="c">{</span>
+  <span class="c">"num_turns":</span> <span class="g">0</span><span class="c">,</span>
+  <span class="c">"total_cost_usd":</span> <span class="g">0</span><span class="c">,</span>
+  <span class="c">"result":</span> <span class="c">"Current session: 4% used · resets Sat, 3am</span>
+            <span class="c">Current week (all models): 94% used …"</span>
+<span class="c">}</span></pre>
+
+    <div class="grid three" style="margin-top: 1.75rem;">
+      <div class="card">
+        <p class="label"><span class="dot ok"></span>Costs nothing</p>
+        <h3>Zero turns, zero dollars</h3>
+        <p>
+          <code>/usage</code> is handled locally by the CLI. It reports no turns and no cost,
+          so polling every five minutes never touches your limits.
+        </p>
+      </div>
+      <div class="card">
+        <p class="label"><span class="dot ok"></span>Nothing to steal</p>
+        <h3>It never sees your credentials</h3>
+        <p>
+          The CLI holds the token and refreshes it. The widget reads stdout. There is no
+          credentials file to parse and no cookie to borrow.
+        </p>
+      </div>
+      <div class="card">
+        <p class="label"><span class="dot warn"></span>Fails loudly</p>
+        <h3>No number beats a wrong number</h3>
+        <p>
+          The CLI's text layout is not a contract. If it changes, the panel says it could not
+          parse rather than showing a figure it guessed.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <section id="accounts">
+    <div class="section-head">
+      <p class="label">More than one login</p>
+      <h2>Work and personal, side by side.</h2>
+      <p>
+        Claude Code keeps each account in its own config directory. Point the widget at them
+        and it polls all of them at once — separate processes, so two accounts take about as
+        long as one.
+      </p>
+    </div>
+
+    <div class="grid two">
+      <div>
+        <p class="label" style="margin-bottom: .6rem;">Set up a second profile</p>
+        <pre>$env:CLAUDE_CONFIG_DIR = "$HOME\.claude-personal"
+claude auth login</pre>
+      </div>
+      <div>
+        <p class="label" style="margin-bottom: .6rem;">Then list it</p>
+        <pre>"accounts": [
+  { "label": "work" },
+  { "label": "personal",
+    "configDir": "C:\\Users\\you\\.claude-personal" }
+]</pre>
+      </div>
+    </div>
+
+    <p style="color: var(--ink-soft); margin: 1.5rem 0 0; max-width: 62ch;">
+      The panel grows a block per account. The taskbar shows the worst number across all of
+      them, because that is the one that decides when you stop working.
+    </p>
+  </section>
+
+  <section id="install">
+    <div class="section-head">
+      <p class="label">Install</p>
+      <h2>Three steps, no installer.</h2>
+    </div>
+
+    <ol class="steps">
+      <li>
+        <h3>Have Claude Code on your PATH</h3>
+        <p>
+          The widget shells out to it. If <code>claude auth status</code> works in a terminal,
+          you are set.
+        </p>
+      </li>
+      <li>
+        <h3>Download the exe and run it</h3>
+        <p>
+          One self-contained file, about 2.3 MB. Nothing to install and no .NET runtime to
+          add. It is unsigned, so SmartScreen asks once — the release page publishes a SHA-256
+          you can check against.
+        </p>
+      </li>
+      <li>
+        <h3>Right-click the panel to point it at your accounts</h3>
+        <p>
+          <b>Edit accounts…</b> opens the config file, <b>Reload config</b> applies it. Drag the
+          panel anywhere, on any monitor; it remembers. Minimise sends it to the taskbar, close
+          sends it to the tray, and exit lives in the tray menu.
+        </p>
+      </li>
+    </ol>
+  </section>
+
+  <section id="limits">
+    <div class="section-head">
+      <p class="label">Before you download</p>
+      <h2>What it will not do.</h2>
+    </div>
+
+    <ul class="limits">
+      <li>
+        <b>It cannot separate Claude Desktop from Claude Code.</b>
+        <span>
+          The percentages are account-level, so anything drawing on the same subscription is
+          already counted. There is no per-app breakdown to show.
+        </span>
+      </li>
+      <li>
+        <b>It depends on a CLI output format that can change.</b>
+        <span>
+          Nothing here is a published API. A layout change breaks the parser, and the fix is a
+          one-line pattern in <code>UsageProbe</code>.
+        </span>
+      </li>
+      <li>
+        <b>It will not help you dodge a limit.</b>
+        <span>
+          Running the accounts you legitimately hold is ordinary use. Rotating between them to
+          keep working past a limit you have hit is against the Anthropic usage policy.
+        </span>
+      </li>
+      <li>
+        <b>Windows only, and unapologetically so.</b>
+        <span>
+          The UI is raw Win32 and GDI, compiled ahead of time. That is what keeps it a 2.3 MB
+          binary instead of a 68 MB one.
+        </span>
+      </li>
+    </ul>
+  </section>
+
+  <footer>
+    <span>MIT · <a href="https://github.com/simoneb/claude-usage-widget">simoneb/claude-usage-widget</a></span>
+    <span>Not affiliated with Anthropic</span>
+  </footer>
+
+</div>
+
+<script>
+  (function () {
+    var slider   = document.getElementById('pct');
+    var weekFill = document.getElementById('weekFill');
+    var weekPct  = document.getElementById('weekPct');
+    var headline = document.getElementById('headline');
+    var badge    = document.getElementById('badge');
+    var taskFill = document.getElementById('taskFill');
+    var readout  = document.getElementById('readout');
+
+    // The same three thresholds the widget itself uses.
+    function state(v) {
+      if (v >= 90) return { colour: 'var(--crit-lit)', flat: 'var(--crit)', word: 'out of room' };
+      if (v >= 75) return { colour: 'var(--warn-lit)', flat: 'var(--warn)', word: 'getting close' };
+      return { colour: 'var(--ok-lit)', flat: 'var(--ok)', word: 'plenty left' };
+    }
+
+    function render(v) {
+      var s = state(v);
+      weekFill.style.width = v + '%';
+      weekFill.style.background = s.colour;
+      weekPct.textContent = v + '%';
+      weekPct.style.color = s.colour;
+      headline.textContent = v + '%';
+      headline.style.color = s.colour;
+      badge.textContent = v;
+      badge.style.background = s.flat;
+      taskFill.style.width = v + '%';
+      taskFill.style.background = s.flat;
+      readout.textContent = v + '% · ' + s.word;
+    }
+
+    slider.addEventListener('input', function () { render(+slider.value); });
+
+    // Fill from empty on load, the way the panel does on its first poll.
+    var others = document.querySelectorAll('.fill[data-fill]');
+    requestAnimationFrame(function () {
+      requestAnimationFrame(function () {
+        render(+slider.value);
+        others.forEach(function (el) {
+          var v = +el.getAttribute('data-fill');
+          el.style.width = v + '%';
+          el.style.background = state(v).colour;
+        });
+      });
+    });
+  })();
+</script>
+
+</body>
+</html>
