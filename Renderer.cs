@@ -236,10 +236,12 @@ internal static class Renderer
 
                 SelectObject(hdc, fonts.Sub);
 
+                var now = DateTime.Now;
+
                 foreach (var (labels, reset) in ResetGroups(s))
                 {
-                    DrawLine(hdc, $"{labels} resets {reset}", padX, y, contentWidth, S(16, scale),
-                        MutedColor, DT_LEFT);
+                    DrawLine(hdc, $"{labels} resets {ResetTime.Describe(reset, now)}",
+                        padX, y, contentWidth, S(16, scale), MutedColor, DT_LEFT);
                     y += S(16, scale);
                 }
             }
@@ -364,7 +366,9 @@ internal static class Renderer
         {
             if (limit.Resets is null) continue;
 
-            var reset = StripZone(limit.Resets);
+            // Grouped on the exact stamp rather than its description: two resets twenty minutes
+            // apart can both describe as "in 3h" without being the same moment.
+            var reset = ResetTime.StripZone(limit.Resets);
             var label = ShortLabel(limit.Label);
             var existing = groups.FindIndex(g => g.Reset == reset);
 
@@ -377,15 +381,6 @@ internal static class Renderer
         return groups;
     }
 
-    /// <summary>
-    /// The CLI appends the local zone to every reset. On a desktop widget it is the same zone
-    /// on every line and costs the width that the time itself needs.
-    /// </summary>
-    private static string StripZone(string reset)
-    {
-        var open = reset.IndexOf(" (", StringComparison.Ordinal);
-        return open > 0 ? reset[..open] : reset;
-    }
 
     private static void DrawLine(
         IntPtr hdc, string text, int x, int y, int width, int height, uint color, uint format)

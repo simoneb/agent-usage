@@ -133,6 +133,9 @@ config, and session history all live there. A fresh profile starts empty.
 - Colours: green below 75%, amber below 90%, red at or above 90%. The taskbar progress bar
   uses the matching normal/paused/error state.
 - The title bar shows how stale the reading is — `just now`, `12s ago`, `3m ago`.
+- Reset times are grouped by moment, so the weekly and model windows that share one share a
+  line. Anything resetting within 24 hours is counted down (`session resets in 1h 32m`);
+  further out, the date is the clearer answer (`week resets Aug 21, 8:59pm`).
 
 ## What the icon shows
 
