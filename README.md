@@ -15,8 +15,23 @@ That slash command is handled locally by the CLI — it reports `num_turns: 0` a
 this app never reads `.credentials.json`, never touches a browser session, and never calls an
 Anthropic endpoint directly.
 
+## Download
+
+Grab a binary from [the latest release](https://github.com/simoneb/claude-usage-widget/releases/latest):
+
+| | Run it directly | Zipped, with README and licence |
+|---|---|---|
+| **Intel / AMD** | `ClaudeUsageWidget-win-x64.exe` | `…-win-x64.zip` |
+| **Arm** | `ClaudeUsageWidget-win-arm64.exe` | `…-win-arm64.zip` |
+
+One self-contained file, about 2.3 MB. No installer and no .NET runtime. It is unsigned, so
+SmartScreen asks once; `SHA256SUMS.txt` accompanies every release.
+
 ## Requirements
 
+- Windows. The UI is raw Win32 and GDI — there is no cross-platform layer, so there is no
+  macOS or Linux build. Built and tested on Windows 11; nothing in it needs Windows 11 except
+  the rounded window corners, so Windows 10 should work, untested.
 - Claude Code installed and on `PATH` (`winget install Anthropic.ClaudeCode`)
 - .NET 10 SDK and the MSVC toolchain (Visual Studio with the C++ workload) to build
 

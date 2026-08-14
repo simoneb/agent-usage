@@ -172,6 +172,13 @@
   }
   .secondary:hover { color: var(--ink); }
 
+  .alt-downloads {
+    margin: 0 0 1.6rem;
+    max-width: 40ch;
+    font-size: .84rem; color: var(--ink-faint);
+  }
+  .alt-downloads a { color: var(--ink-soft); }
+
   .specs { display: flex; flex-wrap: wrap; gap: .4rem 1.5rem; padding: 0; margin: 0; list-style: none; }
   .specs li { font-family: var(--mono); font-size: .68rem; color: var(--ink-faint); }
   .specs b { color: var(--ink-soft); font-weight: 600; }
@@ -367,11 +374,18 @@
       </p>
 
       <div class="actions">
-        <a class="download" href="https://github.com/simoneb/claude-usage-widget/releases/latest">
+        <a class="download" href="https://github.com/simoneb/claude-usage-widget/releases/latest/download/ClaudeUsageWidget-win-x64.exe">
           Download for Windows <span class="size">2.3 MB</span>
         </a>
         <a class="secondary" href="https://github.com/simoneb/claude-usage-widget">Read the source</a>
       </div>
+
+      <p class="alt-downloads">
+        Intel and AMD. On an Arm device, take
+        <a href="https://github.com/simoneb/claude-usage-widget/releases/latest/download/ClaudeUsageWidget-win-arm64.exe">the arm64 build</a>
+        instead — or the zips and checksums from
+        <a href="https://github.com/simoneb/claude-usage-widget/releases/latest">the release page</a>.
+      </p>
 
       <ul class="specs">
         <li><b>17 MB</b> resident</li>
@@ -543,8 +557,8 @@ claude auth login</pre>
         <h3>Download the exe and run it</h3>
         <p>
           One self-contained file, about 2.3 MB. Nothing to install and no .NET runtime to
-          add. It is unsigned, so SmartScreen asks once — the release page publishes a SHA-256
-          you can check against.
+          add. It is unsigned, so SmartScreen asks once — every release publishes a
+          <code>SHA256SUMS.txt</code> you can check against.
         </p>
       </li>
       <li>
@@ -590,7 +604,15 @@ claude auth login</pre>
         <b>Windows only, and unapologetically so.</b>
         <span>
           The UI is raw Win32 and GDI, compiled ahead of time. That is what keeps it a 2.3 MB
-          binary instead of a 68 MB one.
+          binary instead of a 68 MB one, and it is also why there is no macOS or Linux build to
+          port — there is no cross-platform layer to port.
+        </span>
+      </li>
+      <li>
+        <b>Built and tested on Windows 11.</b>
+        <span>
+          Nothing in it needs Windows 11 except the rounded window corners, which simply do not
+          apply on older versions. Windows 10 should work and has not been tested.
         </span>
       </li>
     </ul>
