@@ -63,7 +63,7 @@ First run writes `%APPDATA%\ClaudeUsageWidget\config.json`:
 
 ```json
 {
-  "pollMinutes": 5,
+  "pollSeconds": 30,
   "claudePath": null,
   "alwaysOnTop": true,
   "windowX": null,
@@ -74,8 +74,9 @@ First run writes `%APPDATA%\ClaudeUsageWidget\config.json`:
 }
 ```
 
-- `pollMinutes` — poll interval. Each poll spawns the CLI (~2.5 s), so sub-minute polling buys
-  nothing; limits move slowly.
+- `pollSeconds` — poll interval, 30 by default. Each poll spawns the CLI (~2.5 s), so anything
+  below 10 seconds is clamped to 10; below that the widget spends most of its life starting
+  processes.
 - `claudePath` — explicit path to `claude.exe`. `null` resolves from `PATH`.
 - `windowX` / `windowY` — panel position, saved automatically when you drag it. `null` means
   "lower-right of the work area". Nullable rather than a `-1` sentinel because monitors placed
@@ -83,7 +84,8 @@ First run writes `%APPDATA%\ClaudeUsageWidget\config.json`:
 - `accounts[].configDir` — the `CLAUDE_CONFIG_DIR` for that account. `null` uses whatever
   profile the CLI picks by default.
 
-Right-click the panel for **Edit accounts…**, then **Reload config**.
+Right-click the panel or the tray icon for **Edit config…**, which opens the file in whatever
+editor handles `.json` (Notepad if nothing does), then **Reload config** to apply it.
 
 ## Multi-account
 
@@ -99,7 +101,7 @@ Then list them:
 
 ```json
 {
-  "pollMinutes": 5,
+  "pollSeconds": 30,
   "accounts": [
     { "label": "work",     "configDir": "C:\\Users\\you\\.claude-accounts\\work" },
     { "label": "personal", "configDir": "C:\\Users\\you\\.claude-accounts\\personal" }
@@ -123,7 +125,7 @@ config, and session history all live there. A fresh profile starts empty.
 - **Drag anywhere** else on the panel to move it. Position is saved.
 - **Double-click** to refresh immediately.
 - **Right-click** the panel or the tray icon for: show panel, refresh, always-on-top toggle,
-  minimise, edit config, reload, exit.
+  minimise, **Edit config…**, **Reload config**, exit.
 - Colours: green below 75%, amber below 90%, red at or above 90%. The taskbar progress bar
   uses the matching normal/paused/error state.
 

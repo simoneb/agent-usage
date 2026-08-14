@@ -25,11 +25,9 @@ public static class ConfigStore
         var config = JsonSerializer.Deserialize(File.ReadAllText(FilePath), JsonContext.Default.AppConfig)
                      ?? AppConfig.Default();
 
-        if (config.Accounts.Count == 0)
-            config.Accounts = AppConfig.Default().Accounts;
-
-        if (config.PollMinutes < 1)
-            config.PollMinutes = 5;
+        // Write the tidied version back so a retired key stops travelling with the file.
+        if (config.Normalise())
+            Save(config);
 
         return config;
     }

@@ -13,7 +13,7 @@ public sealed class AccountConfig
 
 public sealed class AppConfig
 {
-    public int PollMinutes { get; set; } = 5;
+    public int PollSeconds { get; set; } = 30;
 
     /// <summary>Explicit path to claude.exe. Null resolves from PATH.</summary>
     public string? ClaudePath { get; set; }
@@ -33,6 +33,37 @@ public sealed class AppConfig
     {
         Accounts = { new AccountConfig { Label = "default", ConfigDir = null } }
     };
+
+    /// <summary>
+    /// Brings a loaded config into range. Returns true when something changed, so the caller
+    /// can write the corrected version back.
+    /// </summary>
+    public bool Normalise()
+    {
+        var changed = false;
+
+        if (Accounts.Count == 0)
+        {
+            Accounts = Default().Accounts;
+            changed = true;
+        }
+
+        if (PollSeconds <= 0)
+        {
+            PollSeconds = 30;
+            changed = true;
+        }
+
+        // Each poll spawns the CLI, which takes roughly two and a half seconds. Below ten
+        // seconds the widget would spend most of its life starting processes.
+        if (PollSeconds < 10)
+        {
+            PollSeconds = 10;
+            changed = true;
+        }
+
+        return changed;
+    }
 }
 
 /// <summary>A single limit window as reported by /usage, e.g. "Current week (all models)".</summary>

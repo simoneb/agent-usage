@@ -22,21 +22,32 @@ public static partial class UsageProbe
         RegexOptions.Multiline)]
     private static partial Regex LimitLine();
 
+    /// <param name="knownAuth">
+    /// A previously confirmed sign-in for this profile. Identity does not change between polls,
+    /// so re-running `auth status` every time only costs another process launch. The caller
+    /// drops its cached value whenever a probe fails, which is when it could be stale.
+    /// </param>
     public static async Task<AccountStatus> ProbeAsync(
-        AccountConfig account, string claudePath, CancellationToken ct)
+        AccountConfig account, string claudePath, AuthStatus? knownAuth, CancellationToken ct)
     {
         var status = new AccountStatus { Account = account, UpdatedAt = DateTime.Now };
 
         try
         {
-            var auth = await RunAsync(claudePath, "auth status --json", account.ConfigDir, ct);
+            var authStatus = knownAuth;
 
-            // Exit code is non-zero when signed out, but the JSON body is still valid — parse first.
-            var authStatus = TryDeserialize(auth.StdOut, JsonContext.Default.AuthStatus);
             if (authStatus is null)
             {
-                status.Error = Describe("auth status", auth);
-                return status;
+                var auth = await RunAsync(claudePath, "auth status --json", account.ConfigDir, ct);
+
+                // Exit code is non-zero when signed out, but the JSON body is still valid —
+                // parse first.
+                authStatus = TryDeserialize(auth.StdOut, JsonContext.Default.AuthStatus);
+                if (authStatus is null)
+                {
+                    status.Error = Describe("auth status", auth);
+                    return status;
+                }
             }
 
             status.LoggedIn = authStatus.LoggedIn;

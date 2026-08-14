@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using static ClaudeUsageWidget.Native;
@@ -41,6 +42,7 @@ internal sealed class Widget : IDisposable
     private bool _trayAdded;
 
     private volatile AccountStatus[] _statuses = Array.Empty<AccountStatus>();
+    private readonly ConcurrentDictionary<string, AuthStatus> _authCache = new();
     private readonly CancellationTokenSource _shutdown = new();
     private int _refreshing;
 
@@ -110,7 +112,7 @@ internal sealed class Widget : IDisposable
         ShowWindow(_hwnd, SW_SHOW);
         UpdateWindow(_hwnd);
 
-        SetTimer(_hwnd, PollTimerId, (uint)(_config.PollMinutes * 60_000), IntPtr.Zero);
+        SetTimer(_hwnd, PollTimerId, (uint)(_config.PollSeconds * 1000), IntPtr.Zero);
         StartRefresh();
 
         while (GetMessageW(out var msg, IntPtr.Zero, 0, 0) > 0)
@@ -350,7 +352,9 @@ internal sealed class Widget : IDisposable
             {
                 // All accounts probed concurrently: separate processes, separate config dirs.
                 var results = await Task.WhenAll(Array.ConvertAll(
-                    accounts, a => UsageProbe.ProbeAsync(a, claudePath, _shutdown.Token)));
+                    accounts, a => UsageProbe.ProbeAsync(a, claudePath, CachedAuth(a), _shutdown.Token)));
+
+                foreach (var result in results) RememberAuth(result);
 
                 _statuses = results;
             }
@@ -370,6 +374,34 @@ internal sealed class Widget : IDisposable
                     PostMessageW(hwnd, WM_APP_REFRESHED, IntPtr.Zero, IntPtr.Zero);
             }
         });
+    }
+
+    private static string AuthKey(AccountConfig account) => account.ConfigDir ?? string.Empty;
+
+    private AuthStatus? CachedAuth(AccountConfig account) =>
+        _authCache.TryGetValue(AuthKey(account), out var auth) ? auth : null;
+
+    /// <summary>
+    /// Holds on to a confirmed sign-in so later polls skip the `auth status` launch, and
+    /// forgets it the moment a probe fails — a signed-out profile has to be noticed.
+    /// </summary>
+    private void RememberAuth(AccountStatus status)
+    {
+        var key = AuthKey(status.Account);
+
+        if (status.Error is not null || !status.LoggedIn)
+        {
+            _authCache.TryRemove(key, out _);
+            return;
+        }
+
+        _authCache[key] = new AuthStatus
+        {
+            LoggedIn = true,
+            Email = status.Email,
+            OrgName = status.OrgName,
+            SubscriptionType = status.SubscriptionType,
+        };
     }
 
     private void OnRefreshed()
@@ -680,7 +712,7 @@ internal sealed class Widget : IDisposable
                 new IntPtr(IdAlwaysOnTop), "Always on top");
             AppendMenuW(menu, MF_STRING, new IntPtr(IdMinimize), "Minimise to taskbar");
             AppendMenuW(menu, MF_SEPARATOR, IntPtr.Zero, null);
-            AppendMenuW(menu, MF_STRING, new IntPtr(IdEditConfig), "Edit accounts…");
+            AppendMenuW(menu, MF_STRING, new IntPtr(IdEditConfig), "Edit config…");
             AppendMenuW(menu, MF_STRING, new IntPtr(IdReload), "Reload config");
             AppendMenuW(menu, MF_SEPARATOR, IntPtr.Zero, null);
             AppendMenuW(menu, MF_STRING, new IntPtr(IdExit), "Exit");
@@ -722,7 +754,7 @@ internal sealed class Widget : IDisposable
                 break;
 
             case IdEditConfig:
-                ShellExecuteW(IntPtr.Zero, "open", ConfigStore.FilePath, null, null, SW_SHOW);
+                OpenConfig();
                 break;
 
             case IdReload:
@@ -738,6 +770,22 @@ internal sealed class Widget : IDisposable
         }
     }
 
+    private void OpenConfig()
+    {
+        if (!File.Exists(ConfigStore.FilePath))
+        {
+            try { ConfigStore.Save(_config); } catch { }
+        }
+
+        var result = ShellExecuteW(IntPtr.Zero, "open", ConfigStore.FilePath, null, null, SW_SHOW);
+
+        // ShellExecute reports success with a value above 32. Anything lower means no
+        // application is registered for .json, which is the default state of a clean Windows
+        // install — fall back to the editor that is always there rather than doing nothing.
+        if (result.ToInt64() <= 32)
+            ShellExecuteW(IntPtr.Zero, "open", "notepad.exe", ConfigStore.FilePath, null, SW_SHOW);
+    }
+
     private void ReloadConfig()
     {
         try
@@ -746,7 +794,7 @@ internal sealed class Widget : IDisposable
             _claudePath = UsageProbe.ResolveClaudePath(_config.ClaudePath);
 
             KillTimer(_hwnd, PollTimerId);
-            SetTimer(_hwnd, PollTimerId, (uint)(_config.PollMinutes * 60_000), IntPtr.Zero);
+            SetTimer(_hwnd, PollTimerId, (uint)(_config.PollSeconds * 1000), IntPtr.Zero);
 
             ApplyTopmost();
             StartRefresh();
