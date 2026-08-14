@@ -159,7 +159,7 @@ internal static class Renderer
             else
             {
                 h += s.Limits.Count * S(24, scale);
-                if (FirstReset(s) is not null) h += S(16, scale);
+                h += ResetGroups(s).Count * S(16, scale);
             }
 
             if (i < statuses.Count - 1) h += S(16, scale);       // divider gap
@@ -234,10 +234,11 @@ internal static class Renderer
                     y += S(24, scale);
                 }
 
-                if (FirstReset(s) is string reset)
+                SelectObject(hdc, fonts.Sub);
+
+                foreach (var (labels, reset) in ResetGroups(s))
                 {
-                    SelectObject(hdc, fonts.Sub);
-                    DrawLine(hdc, "resets " + reset, padX, y, contentWidth, S(16, scale),
+                    DrawLine(hdc, $"{labels} resets {reset}", padX, y, contentWidth, S(16, scale),
                         MutedColor, DT_LEFT);
                     y += S(16, scale);
                 }
@@ -349,16 +350,41 @@ internal static class Renderer
         return label.Replace("Current ", "", StringComparison.OrdinalIgnoreCase).ToLowerInvariant();
     }
 
-    private static string? FirstReset(AccountStatus s)
+    /// <summary>
+    /// Reset times, one line per distinct moment, naming the rows that share it. The session
+    /// resets in hours and the weekly windows in days, so a single line could only ever be
+    /// right about one of them — and the weekly rows almost always share a reset, which is
+    /// what keeps this to two lines rather than one per row.
+    /// </summary>
+    private static List<(string Labels, string Reset)> ResetGroups(AccountStatus s)
     {
-        foreach (var l in s.Limits)
-            if (l.Resets is not null && l.Label.Contains("week", StringComparison.OrdinalIgnoreCase))
-                return l.Resets;
+        var groups = new List<(string Labels, string Reset)>();
 
-        foreach (var l in s.Limits)
-            if (l.Resets is not null) return l.Resets;
+        foreach (var limit in s.Limits)
+        {
+            if (limit.Resets is null) continue;
 
-        return null;
+            var reset = StripZone(limit.Resets);
+            var label = ShortLabel(limit.Label);
+            var existing = groups.FindIndex(g => g.Reset == reset);
+
+            if (existing >= 0)
+                groups[existing] = (groups[existing].Labels + " · " + label, reset);
+            else
+                groups.Add((label, reset));
+        }
+
+        return groups;
+    }
+
+    /// <summary>
+    /// The CLI appends the local zone to every reset. On a desktop widget it is the same zone
+    /// on every line and costs the width that the time itself needs.
+    /// </summary>
+    private static string StripZone(string reset)
+    {
+        var open = reset.IndexOf(" (", StringComparison.Ordinal);
+        return open > 0 ? reset[..open] : reset;
     }
 
     private static void DrawLine(
