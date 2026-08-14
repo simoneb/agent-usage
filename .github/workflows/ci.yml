@@ -7,9 +7,9 @@ on:
   pull_request:
 
 jobs:
-  build:
-    # Windows only, and not by preference: the app is raw Win32 and the NativeAOT toolchain
-    # links against MSVC. There is no portable half worth testing on Linux.
+  # Windows only, and not by preference: the app is raw Win32 and the NativeAOT toolchain
+  # links against MSVC. There is no portable half worth testing on Linux.
+  test:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v7
@@ -21,6 +21,20 @@ jobs:
       # layout, so it is the part with tests.
       - run: dotnet test tests/ClaudeUsageWidget.Tests -c Release
 
+  build:
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # arm64 is cross-compiled from the x64 runner. It cannot be run here, only linked,
+        # which is still the failure worth catching early.
+        rid: [win-x64, win-arm64]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+
       # ILCompiler shells out to vswhere to find the MSVC linker and does not search the
       # Visual Studio Installer directory itself. It happens to be on PATH on the hosted
       # image today; adding it explicitly means a change there fails loudly here instead.
@@ -29,18 +43,18 @@ jobs:
 
       # Publish, not build: AOT compilation only happens on publish, and a link failure is
       # exactly the kind of break that would otherwise reach a release.
-      - run: dotnet publish -c Release -o dist
+      - run: dotnet publish -c Release -r ${{ matrix.rid }} -o dist
 
       - name: Report the binary size
         run: |
           $exe = Get-Item dist\ClaudeUsageWidget.exe
           $mb = [math]::Round($exe.Length / 1MB, 2)
-          echo "ClaudeUsageWidget.exe is $mb MB" >> $env:GITHUB_STEP_SUMMARY
+          echo "${{ matrix.rid }}: $mb MB" >> $env:GITHUB_STEP_SUMMARY
           # Size is the whole reason this is NativeAOT rather than WinForms. A regression
           # past 15 MB means something pulled the framework back in.
           if ($mb -gt 15) { throw "Binary grew to $mb MB — expected well under 15 MB" }
 
       - uses: actions/upload-artifact@v7
         with:
-          name: ClaudeUsageWidget
+          name: ClaudeUsageWidget-${{ matrix.rid }}
           path: dist/ClaudeUsageWidget.exe

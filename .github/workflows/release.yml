@@ -135,6 +135,10 @@ jobs:
   build:
     needs: prepare
     runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        rid: [win-x64, win-arm64]
     steps:
       - uses: actions/checkout@v7
         with:
@@ -144,21 +148,27 @@ jobs:
           dotnet-version: '10.0.x'
       - name: Put vswhere on PATH
         run: echo "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer" >> $env:GITHUB_PATH
-      - run: dotnet publish -c Release -o dist
+      - run: dotnet publish -c Release -r ${{ matrix.rid }} -o publish
 
-      # The exe is unsigned, so SmartScreen will warn on first run. A published checksum is
-      # the only thing a downloader can verify against.
-      - name: Checksum the binary
+      # Two shapes of the same binary. The bare .exe is what most people want; the zip exists
+      # because browsers and corporate filters block a downloaded .exe far more often than a
+      # zip, and it carries the licence and README with it.
+      - name: Package
+        env:
+          RID: ${{ matrix.rid }}
+          VERSION: ${{ needs.prepare.outputs.version }}
         run: |
-          $hash = (Get-FileHash dist\ClaudeUsageWidget.exe -Algorithm SHA256).Hash.ToLower()
-          "$hash  ClaudeUsageWidget.exe" | Out-File dist\ClaudeUsageWidget.exe.sha256 -Encoding ascii
+          New-Item -ItemType Directory assets | Out-Null
+          Copy-Item publish\ClaudeUsageWidget.exe "assets\ClaudeUsageWidget-$env:RID.exe"
+
+          New-Item -ItemType Directory staging | Out-Null
+          Copy-Item publish\ClaudeUsageWidget.exe, README.md, LICENSE staging\
+          Compress-Archive staging\* "assets\ClaudeUsageWidget-$env:VERSION-$env:RID.zip"
 
       - uses: actions/upload-artifact@v7
         with:
-          name: release-assets
-          path: |
-            dist/ClaudeUsageWidget.exe
-            dist/ClaudeUsageWidget.exe.sha256
+          name: release-${{ matrix.rid }}
+          path: assets/
 
   github-release:
     needs: [prepare, build]
@@ -172,8 +182,15 @@ jobs:
           fetch-depth: 0
       - uses: actions/download-artifact@v8
         with:
-          name: release-assets
+          pattern: release-*
+          merge-multiple: true
           path: dist/
+
+      # The exe is unsigned, so SmartScreen will warn on first run. A published checksum is
+      # the only thing a downloader can verify against.
+      - name: Checksum every asset
+        run: cd dist && sha256sum * > SHA256SUMS.txt
+
       # The notes are the commit subjects since the previous tag, plus the one thing a reader
       # actually needs: which file to download and how to check it.
       - name: Create the release
@@ -183,15 +200,20 @@ jobs:
         run: |
           previous=$(git tag --sort=-version:refname | grep -A1 -x "$TAG" | tail -n1)
           {
-            echo "Download \`ClaudeUsageWidget.exe\` below and run it. No installer, no runtime."
+            echo "Windows only. Download the \`win-x64\` build unless you are on an Arm device."
             echo
-            echo "Verify it first if you like:"
+            echo "| | Run it directly | Zipped, with README and licence |"
+            echo "|---|---|---|"
+            echo "| **Intel / AMD** | \`ClaudeUsageWidget-win-x64.exe\` | \`…-win-x64.zip\` |"
+            echo "| **Arm** | \`ClaudeUsageWidget-win-arm64.exe\` | \`…-win-arm64.zip\` |"
+            echo
+            echo "No installer and no .NET runtime — it is a single self-contained binary."
+            echo "It is unsigned, so SmartScreen will ask once. Checksums are in"
+            echo "\`SHA256SUMS.txt\`:"
             echo
             echo '```powershell'
-            echo '(Get-FileHash .\ClaudeUsageWidget.exe -Algorithm SHA256).Hash.ToLower()'
+            echo '(Get-FileHash .\ClaudeUsageWidget-win-x64.exe -Algorithm SHA256).Hash.ToLower()'
             echo '```'
-            echo
-            echo "It is unsigned, so SmartScreen will ask once."
             echo
             echo "## Changes"
             echo
