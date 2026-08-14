@@ -171,8 +171,11 @@ notification area and drag the badge out to pin it.
 
 ## Autostart
 
-```powershell
-$exe = "D:\dev\claude-usage-widget\dist\ClaudeUsageWidget.exe"
-Set-ItemProperty "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run" `
-  -Name ClaudeUsageWidget -Value $exe
-```
+Right-click the panel or the tray icon and tick **Start with Windows**. It writes the running
+exe's own path to the per-user Run key, so it needs no elevation and appears in Task Manager's
+**Startup apps**, where it can be disabled without knowing this app put it there.
+
+The tick reflects the registry rather than a saved preference, so turning it off in Task Manager
+shows up here too. It also reads as off when the entry points at a copy that has since moved —
+ticking it then repairs the path instead of leaving a checkmark on something that starts
+nothing. Move the exe, tick it again.

@@ -22,6 +22,7 @@ internal sealed class Widget : IDisposable
     private const int IdReload = 5;
     private const int IdExit = 6;
     private const int IdShowPanel = 7;
+    private const int IdAutostart = 8;
 
     // The limit chooser is built from whatever rows the CLI reported, so its ids are assigned
     // at menu-build time from this base.
@@ -810,6 +811,11 @@ internal sealed class Widget : IDisposable
 
             AppendMenuW(menu, MF_STRING | (_config.AlwaysOnTop ? MF_CHECKED : 0),
                 new IntPtr(IdAlwaysOnTop), "Always on top");
+
+            // Read live rather than cached: Task Manager's Startup apps can turn this off
+            // behind our back, and a stale checkmark would be a lie.
+            AppendMenuW(menu, MF_STRING | (Autostart.IsEnabled() ? MF_CHECKED : 0),
+                new IntPtr(IdAutostart), "Start with Windows");
             AppendMenuW(menu, MF_STRING, new IntPtr(IdMinimize), "Minimise to taskbar");
             AppendMenuW(menu, MF_SEPARATOR, IntPtr.Zero, null);
             AppendMenuW(menu, MF_STRING, new IntPtr(IdEditConfig), "Edit config…");
@@ -853,6 +859,10 @@ internal sealed class Widget : IDisposable
 
             case IdRefresh:
                 StartRefresh();
+                break;
+
+            case IdAutostart:
+                Autostart.Set(!Autostart.IsEnabled());
                 break;
 
             case IdAlwaysOnTop:
