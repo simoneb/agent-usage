@@ -197,12 +197,12 @@
     font-family: "Segoe UI", system-ui, sans-serif;
     font-size: 13px; line-height: 1.4;
   }
-  .panel-bar { display: flex; justify-content: flex-end; height: 26px; }
-  .panel-bar span {
-    width: 32px; display: grid; place-items: center;
+  .panel-bar { display: flex; align-items: center; height: 26px; padding-left: 16px; }
+  .panel-bar .stale { color: var(--slab-faint); font-size: 12px; margin-right: auto; }
+  .panel-bar span.btn {
+    width: 32px; height: 26px; display: grid; place-items: center;
     color: #9c9ca6; font-size: 12px; line-height: 1;
   }
-  .panel-bar span:last-child { border-top-right-radius: 8px; }
   .panel-body { padding: 0 16px; }
 
   .acct + .acct { border-top: 1px solid var(--slab-rule); margin-top: 14px; padding-top: 14px; }
@@ -233,11 +233,21 @@
     border: 1px solid var(--rule);
     border-radius: 8px;
   }
+  /* The icon as it renders with two accounts: a bar pair each, session above week. */
   .badge {
     width: 26px; height: 26px; border-radius: 4px;
-    display: grid; place-items: center;
-    font-family: var(--mono); font-size: 11px; font-weight: 600; color: #101014;
-    transition: background-color .25s linear;
+    background: var(--slab);
+    padding: 3px;
+    display: flex; flex-direction: column; justify-content: center; gap: 1px;
+  }
+  .badge .track {
+    display: block; height: 3px; border-radius: 1px;
+    background: var(--slab-track); overflow: hidden;
+  }
+  .badge .track.pair-end { margin-bottom: 3px; }
+  .badge .track b {
+    display: block; height: 100%; width: 0; border-radius: 1px;
+    transition: width .9s cubic-bezier(.22, .8, .28, 1), background-color .25s linear;
   }
   .taskbar-name { font-size: .8rem; color: var(--ink-soft); }
   .taskbar-progress { width: 88px; margin-left: auto; height: 3px; border-radius: 2px; background: var(--rule); overflow: hidden; }
@@ -328,6 +338,22 @@
   ol.steps h3 { margin: 0; font-size: 1.02rem; font-weight: 600; letter-spacing: -.01em; }
   ol.steps p { margin: 0; color: var(--ink-soft); font-size: .93rem; max-width: 56ch; }
 
+  .ladder { overflow-x: auto; }
+  .ladder table { border-collapse: collapse; width: 100%; min-width: 30rem; }
+  .ladder th, .ladder td {
+    text-align: left; padding: .7rem 1rem .7rem 0;
+    border-bottom: 1px solid var(--rule); vertical-align: top;
+  }
+  .ladder th {
+    font-family: var(--mono); font-size: .62rem; font-weight: 600;
+    letter-spacing: .1em; text-transform: uppercase; color: var(--ink-faint);
+  }
+  .ladder td:first-child {
+    font-family: var(--mono); font-size: .8rem; font-weight: 600;
+    white-space: nowrap; width: 6rem;
+  }
+  .ladder td:last-child { color: var(--ink-soft); font-size: .93rem; }
+
   .limits { margin: 0; padding: 0; list-style: none; display: grid; gap: 1.1rem; }
   .limits li { display: grid; gap: .2rem; padding-left: 1.15rem; position: relative; max-width: 62ch; }
   .limits li::before {
@@ -358,6 +384,7 @@
     <nav>
       <a href="#how">How it reads</a>
       <a href="#accounts">Accounts</a>
+      <a href="#icon">The icon</a>
       <a href="#install">Install</a>
       <a href="https://github.com/simoneb/claude-usage-widget">GitHub</a>
     </nav>
@@ -397,7 +424,10 @@
     <div class="stage">
       <!-- The panel, at the width it actually renders. -->
       <div class="panel">
-        <div class="panel-bar" aria-hidden="true"><span>&#8212;</span><span>&#10005;</span></div>
+        <div class="panel-bar" aria-hidden="true">
+          <span class="stale">just now</span>
+          <span class="btn">&#8212;</span><span class="btn">&#10005;</span>
+        </div>
         <div class="panel-body">
           <div class="acct">
             <div class="acct-head">
@@ -407,41 +437,48 @@
             <div class="acct-mail">you@company.com</div>
             <div class="row">
               <span class="row-label">session</span>
-              <span class="track"><i class="fill" data-fill="4"></i></span>
-              <span class="row-pct">4%</span>
+              <span class="track"><i class="fill" data-fill="14"></i></span>
+              <span class="row-pct">14%</span>
             </div>
             <div class="row">
               <span class="row-label">week</span>
               <span class="track"><i class="fill" id="weekFill"></i></span>
               <span class="row-pct" id="weekPct">94%</span>
             </div>
-            <div class="acct-reset">resets Sat, 11:59am</div>
+            <div class="acct-reset">session resets in 1h 32m</div>
+            <div class="acct-reset">week resets in 10h 32m</div>
           </div>
 
           <div class="acct">
             <div class="acct-head">
               <span class="acct-name">personal</span>
-              <span class="acct-pct" style="color: var(--ok-lit)">31%</span>
+              <span class="acct-pct" style="color: var(--ok-lit)">5%</span>
             </div>
             <div class="acct-mail">you@gmail.com</div>
             <div class="row">
               <span class="row-label">session</span>
-              <span class="track"><i class="fill" data-fill="12"></i></span>
-              <span class="row-pct" style="color: var(--ok-lit)">12%</span>
+              <span class="track"><i class="fill" data-fill="56"></i></span>
+              <span class="row-pct" style="color: var(--ok-lit)">56%</span>
             </div>
             <div class="row">
               <span class="row-label">week</span>
-              <span class="track"><i class="fill" data-fill="31"></i></span>
-              <span class="row-pct" style="color: var(--ok-lit)">31%</span>
+              <span class="track"><i class="fill" data-fill="5"></i></span>
+              <span class="row-pct" style="color: var(--ok-lit)">5%</span>
             </div>
-            <div class="acct-reset">resets Thu, 8:59pm</div>
+            <div class="acct-reset">session resets in 3h 1m</div>
+            <div class="acct-reset">week resets Aug 21, 8:59pm</div>
           </div>
         </div>
       </div>
 
       <!-- Minimised, the taskbar button carries the same number. -->
       <div class="taskbar">
-        <span class="badge" id="badge">94</span>
+        <span class="badge" aria-hidden="true">
+          <i class="track"><b data-fill="14"></b></i>
+          <i class="track pair-end"><b id="badgeWeek"></b></i>
+          <i class="track"><b data-fill="56"></b></i>
+          <i class="track"><b data-fill="5"></b></i>
+        </span>
         <span class="taskbar-name">Claude Usage</span>
         <span class="taskbar-progress"><i id="taskFill"></i></span>
       </div>
@@ -539,6 +576,40 @@ claude auth login</pre>
     </p>
   </section>
 
+  <section id="icon">
+    <div class="section-head">
+      <p class="label">In the taskbar and tray</p>
+      <h2>Two horizons, sixteen pixels.</h2>
+      <p>
+        Two things can stop you working: the session window, which resets in hours, and the
+        weekly one, which locks you out for days. Both belong in the icon, and there is only so
+        much room — so detail is dropped in a fixed order as accounts are added.
+      </p>
+    </div>
+
+    <div class="ladder">
+      <table>
+        <thead>
+          <tr><th>Accounts</th><th>What the icon shows</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>1</td><td>Week digits, session as a strip along the top edge</td></tr>
+          <tr><td>2</td><td>A bar pair each — session above week, matching the panel's rows</td></tr>
+          <tr><td>3–4</td><td>One bar each, week only</td></tr>
+          <tr><td>5+</td><td>Digits for the worst week</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p style="color: var(--ink-soft); margin: 1.5rem 0 0; max-width: 62ch;">
+      Colour always means severity, never identity — a red bar tells you a limit is nearly gone,
+      not which account it belongs to. Accounts are told apart by position, in config order,
+      which makes the panel the icon's legend. If you only care about one number,
+      <b>Icon shows</b> in the right-click menu lists the limits your CLI actually reported and
+      pins the icon to one of them.
+    </p>
+  </section>
+
   <section id="install">
     <div class="section-head">
       <p class="label">Install</p>
@@ -627,13 +698,13 @@ claude auth login</pre>
 
 <script>
   (function () {
-    var slider   = document.getElementById('pct');
-    var weekFill = document.getElementById('weekFill');
-    var weekPct  = document.getElementById('weekPct');
-    var headline = document.getElementById('headline');
-    var badge    = document.getElementById('badge');
-    var taskFill = document.getElementById('taskFill');
-    var readout  = document.getElementById('readout');
+    var slider    = document.getElementById('pct');
+    var weekFill  = document.getElementById('weekFill');
+    var weekPct   = document.getElementById('weekPct');
+    var headline  = document.getElementById('headline');
+    var badgeWeek = document.getElementById('badgeWeek');
+    var taskFill  = document.getElementById('taskFill');
+    var readout   = document.getElementById('readout');
 
     // The same three thresholds the widget itself uses.
     function state(v) {
@@ -650,8 +721,8 @@ claude auth login</pre>
       weekPct.style.color = s.colour;
       headline.textContent = v + '%';
       headline.style.color = s.colour;
-      badge.textContent = v;
-      badge.style.background = s.flat;
+      badgeWeek.style.width = v + '%';
+      badgeWeek.style.background = s.colour;
       taskFill.style.width = v + '%';
       taskFill.style.background = s.flat;
       readout.textContent = v + '% · ' + s.word;
@@ -660,7 +731,8 @@ claude auth login</pre>
     slider.addEventListener('input', function () { render(+slider.value); });
 
     // Fill from empty on load, the way the panel does on its first poll.
-    var others = document.querySelectorAll('.fill[data-fill]');
+    // Both the panel rows and the icon's own bars.
+    var others = document.querySelectorAll('[data-fill]');
     requestAnimationFrame(function () {
       requestAnimationFrame(function () {
         render(+slider.value);
