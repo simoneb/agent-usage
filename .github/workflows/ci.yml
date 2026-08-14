@@ -12,8 +12,8 @@ jobs:
     # links against MSVC. There is no portable half worth testing on Linux.
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: '10.0.x'
 
@@ -40,7 +40,7 @@ jobs:
           # past 15 MB means something pulled the framework back in.
           if ($mb -gt 15) { throw "Binary grew to $mb MB — expected well under 15 MB" }
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: ClaudeUsageWidget
           path: dist/ClaudeUsageWidget.exe
