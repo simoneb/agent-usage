@@ -171,13 +171,22 @@ internal static class Renderer
     public static void Draw(
         IntPtr hdc, int width, int height,
         IReadOnlyList<AccountStatus> statuses, FontSet fonts, double scale,
-        int hoverButton = ButtonNone)
+        int hoverButton = ButtonNone, string? freshness = null)
     {
         var full = new RECT { Left = 0, Top = 0, Right = width, Bottom = height };
         FillSolid(hdc, full, Background);
 
         SetBkMode(hdc, TRANSPARENT);
         DrawTitleBarButtons(hdc, width, scale, hoverButton);
+
+        // The title bar is otherwise empty on the left, so freshness costs no height.
+        if (freshness is not null)
+        {
+            SelectObject(hdc, fonts.Sub);
+            DrawLine(hdc, freshness, S(16, scale), 0,
+                width - S(16, scale) - S(ButtonWidth * 2, scale), S(TitleBarHeight, scale),
+                MutedColor, DT_LEFT | DT_VCENTER);
+        }
 
         var padX = S(16, scale);
         var y = S(TitleBarHeight, scale) + S(2, scale);

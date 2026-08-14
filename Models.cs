@@ -21,6 +21,12 @@ public sealed class AppConfig
     public bool AlwaysOnTop { get; set; } = true;
 
     /// <summary>
+    /// Which limit the icon and taskbar bar report, matched against a row label — "session",
+    /// "all models", a model name. Null shows everything the icon has room for.
+    /// </summary>
+    public string? IconLimit { get; set; }
+
+    /// <summary>
     /// Last panel position. Null means "not placed yet". Nullable rather than a -1 sentinel
     /// because monitors left of or above the primary one have genuinely negative coordinates.
     /// </summary>
@@ -84,6 +90,32 @@ public sealed class AccountStatus
     public string? Error { get; set; }
 
     public DateTime? UpdatedAt { get; set; }
+
+    /// <summary>
+    /// The current session window. A different horizon from the weekly figure rather than a
+    /// smaller version of it — it can sit above or below the week at any time.
+    /// </summary>
+    public int? SessionPercent
+    {
+        get
+        {
+            foreach (var l in Limits)
+                if (l.Label.Contains("session", StringComparison.OrdinalIgnoreCase))
+                    return l.Percent;
+
+            return null;
+        }
+    }
+
+    /// <summary>The row whose label contains <paramref name="fragment"/>, if this account has one.</summary>
+    public int? PercentFor(string fragment)
+    {
+        foreach (var l in Limits)
+            if (l.Label.Contains(fragment, StringComparison.OrdinalIgnoreCase))
+                return l.Percent;
+
+        return null;
+    }
 
     /// <summary>The number the taskbar shows. Prefers the all-models weekly row.</summary>
     public int? HeadlinePercent

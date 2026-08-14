@@ -281,6 +281,7 @@ internal static class Native
     public const int SM_CYSCREEN = 1;
 
     public const uint MF_STRING = 0x0000;
+    public const uint MF_POPUP = 0x0010;
     public const uint MF_SEPARATOR = 0x0800;
     public const uint MF_CHECKED = 0x0008;
     public const uint MF_GRAYED = 0x0001;
@@ -324,7 +325,11 @@ internal static class Native
 
     // ---- tray icon -------------------------------------------------------
 
-    [StructLayout(LayoutKind.Sequential)]
+    // CharSet matters even though the buffers are `fixed`: LayoutKind.Sequential defaults to
+    // CharSet.Ansi, which declares every char in this struct to be one byte wide. The tip is
+    // written as UTF-16, so a reader working to the Ansi contract stops at the first char's
+    // high byte — a tooltip of "default: …" renders as "d".
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
     public unsafe struct NOTIFYICONDATAW
     {
         public uint cbSize;
@@ -344,16 +349,28 @@ internal static class Native
         public IntPtr hBalloonIcon;
     }
 
-    [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
+    // ExactSpelling stops the runtime from ever probing for a mangled variant: the W entry
+    // point is the one being named, and silently binding anything else is how a tooltip ends
+    // up being read a byte at a time.
+    [DllImport("shell32.dll", CharSet = CharSet.Unicode, ExactSpelling = true)]
     public static extern bool Shell_NotifyIconW(uint message, ref NOTIFYICONDATAW data);
 
     public const uint NIM_ADD = 0;
     public const uint NIM_MODIFY = 1;
     public const uint NIM_DELETE = 2;
+    public const uint NIM_SETVERSION = 4;
+
+    /// <summary>
+    /// Without this the icon runs with the original Shell_NotifyIcon semantics, where szTip is
+    /// only 64 characters and the shell decides when a tooltip appears. Version 4 uses the
+    /// full buffer and honours NIF_SHOWTIP.
+    /// </summary>
+    public const uint NOTIFYICON_VERSION_4 = 4;
 
     public const uint NIF_MESSAGE = 0x0001;
     public const uint NIF_ICON = 0x0002;
     public const uint NIF_TIP = 0x0004;
+    public const uint NIF_SHOWTIP = 0x0080;
 
     // ---- gdi32 -----------------------------------------------------------
 

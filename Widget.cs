@@ -23,9 +23,15 @@ internal sealed class Widget : IDisposable
     private const int IdExit = 6;
     private const int IdShowPanel = 7;
 
+    // The limit chooser is built from whatever rows the CLI reported, so its ids are assigned
+    // at menu-build time from this base.
+    private const int IdIconLimitEverything = 100;
+    private const int IdIconLimitFirst = 101;
+
     private const uint TrayIconId = 1;
 
     private static readonly IntPtr PollTimerId = new(1);
+    private static readonly IntPtr ClockTimerId = new(2);
 
     private IntPtr _hwnd;
     private AppConfig _config;
@@ -36,6 +42,11 @@ internal sealed class Widget : IDisposable
 
     private IntPtr _iconSmall;
     private IntPtr _iconBig;
+
+    private List<string> _limitLabels = new();
+
+    private DateTime? _lastRefreshAt;
+    private string? _freshness;
 
     private int _hoverButton = Renderer.ButtonNone;
     private bool _mouseTracking;
@@ -113,6 +124,7 @@ internal sealed class Widget : IDisposable
         UpdateWindow(_hwnd);
 
         SetTimer(_hwnd, PollTimerId, (uint)(_config.PollSeconds * 1000), IntPtr.Zero);
+        SetTimer(_hwnd, ClockTimerId, 1000, IntPtr.Zero);
         StartRefresh();
 
         while (GetMessageW(out var msg, IntPtr.Zero, 0, 0) > 0)
@@ -228,6 +240,7 @@ internal sealed class Widget : IDisposable
 
             case WM_TIMER:
                 if (wParam == PollTimerId) StartRefresh();
+                else if (wParam == ClockTimerId) UpdateFreshness();
                 return IntPtr.Zero;
 
             case WM_APP_REFRESHED:
@@ -289,7 +302,7 @@ internal sealed class Widget : IDisposable
         using (var surface = new DibSurface(client.Width, client.Height))
         {
             Renderer.Draw(surface.Hdc, surface.Width, surface.Height, _statuses, _fonts, _scale,
-                _hoverButton);
+                _hoverButton, _freshness);
             BitBlt(hdc, 0, 0, client.Width, client.Height, surface.Hdc, 0, 0, SRCCOPY);
         }
 
@@ -304,7 +317,8 @@ internal sealed class Widget : IDisposable
         var height = client.Height > 0 ? client.Height : Renderer.MeasureHeight(_statuses, _scale);
 
         var surface = new DibSurface(width, height);
-        Renderer.Draw(surface.Hdc, surface.Width, surface.Height, _statuses, _fonts, _scale);
+        Renderer.Draw(surface.Hdc, surface.Width, surface.Height, _statuses, _fonts, _scale,
+            Renderer.ButtonNone, _freshness);
         return surface;
     }
 
@@ -376,6 +390,31 @@ internal sealed class Widget : IDisposable
         });
     }
 
+    /// <summary>
+    /// How stale the reading is, in the coarsest unit that still reads as a number. Recomputed
+    /// every second but only repainted when the rendered text actually changes, so a panel
+    /// sitting at "3m ago" is not redrawn sixty times a minute.
+    /// </summary>
+    private void UpdateFreshness()
+    {
+        var text = _lastRefreshAt is DateTime at ? Describe(DateTime.Now - at) : null;
+
+        if (text == _freshness) return;
+
+        _freshness = text;
+        InvalidateRect(_hwnd, IntPtr.Zero, false);
+        DwmInvalidateIconicBitmaps(_hwnd);
+    }
+
+    private static string Describe(TimeSpan age)
+    {
+        if (age.TotalSeconds < 5) return "just now";
+        if (age.TotalSeconds < 60) return $"{(int)age.TotalSeconds}s ago";
+        if (age.TotalMinutes < 60) return $"{(int)age.TotalMinutes}m ago";
+
+        return $"{(int)age.TotalHours}h ago";
+    }
+
     private static string AuthKey(AccountConfig account) => account.ConfigDir ?? string.Empty;
 
     private AuthStatus? CachedAuth(AccountConfig account) =>
@@ -406,6 +445,9 @@ internal sealed class Widget : IDisposable
 
     private void OnRefreshed()
     {
+        _lastRefreshAt = DateTime.Now;
+        _freshness = "just now";
+
         ResizeToContent();
         InvalidateRect(_hwnd, IntPtr.Zero, false);
         UpdateTaskbar();
@@ -414,6 +456,13 @@ internal sealed class Widget : IDisposable
         // Tell DWM the cached hover bitmap is out of date.
         DwmInvalidateIconicBitmaps(_hwnd);
     }
+
+    /// <summary>
+    /// The single number this account contributes to the taskbar bar and the tooltip: the
+    /// chosen limit, or the weekly headline when no choice has been made.
+    /// </summary>
+    private int? MetricFor(AccountStatus status) =>
+        _config.IconLimit is string fragment ? status.PercentFor(fragment) : status.HeadlinePercent;
 
     private void UpdateTaskbar()
     {
@@ -426,7 +475,7 @@ internal sealed class Widget : IDisposable
         foreach (var s in statuses)
         {
             if (s.Error is not null) { anyError = true; continue; }
-            if (s.HeadlinePercent is int p) headline = headline is null ? p : Math.Max(headline.Value, p);
+            if (MetricFor(s) is int p) headline = headline is null ? p : Math.Max(headline.Value, p);
         }
 
         if (headline is null)
@@ -541,17 +590,9 @@ internal sealed class Widget : IDisposable
     private void UpdateIcon()
     {
         var statuses = _statuses;
-        int? headline = null;
-        var anyError = false;
 
-        foreach (var s in statuses)
-        {
-            if (s.Error is not null) { anyError = true; continue; }
-            if (s.HeadlinePercent is int p) headline = headline is null ? p : Math.Max(headline.Value, p);
-        }
-
-        var small = IconBuilder.Build(headline, anyError && headline is null, 16);
-        var big = IconBuilder.Build(headline, anyError && headline is null, 32);
+        var small = IconBuilder.Build(statuses, 16, _config.IconLimit);
+        var big = IconBuilder.Build(statuses, 32, _config.IconLimit);
 
         SendMessageW(_hwnd, WM_SETICON, new IntPtr(ICON_SMALL), small);
         SendMessageW(_hwnd, WM_SETICON, new IntPtr(ICON_BIG), big);
@@ -653,12 +694,15 @@ internal sealed class Widget : IDisposable
         var statuses = _statuses;
         if (statuses.Length == 0) return "Claude usage — loading…";
 
+        // Name the metric, since which one the icon reports is now a choice.
+        var metric = _config.IconLimit is string fragment ? MenuLabel(fragment).ToLowerInvariant() : "week";
+
         var parts = new List<string>();
         foreach (var s in statuses)
         {
             parts.Add(s.Error is not null
-                ? $"{s.Account.Label}: {(s.LoggedIn ? "error" : "signed out")}"
-                : $"{s.Account.Label}: {s.HeadlinePercent}%");
+                ? $"{s.Account.Label} · {(s.LoggedIn ? "error" : "signed out")}"
+                : $"{s.Account.Label} · {metric} {MetricFor(s)}%");
         }
 
         var tip = string.Join("\n", parts);
@@ -668,12 +712,20 @@ internal sealed class Widget : IDisposable
     private void AddTray()
     {
         var data = NewTrayData();
-        data.uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP;
+        data.uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP | NIF_SHOWTIP;
         data.uCallbackMessage = WM_APP_TRAY;
         data.hIcon = _iconSmall;
         SetTip(ref data, TrayTip());
 
         _trayAdded = Shell_NotifyIconW(NIM_ADD, ref data);
+        if (!_trayAdded) return;
+
+        // Opt into the modern contract, which is what makes the full tip buffer and
+        // NIF_SHOWTIP mean anything. The callback still reports its event in the low word of
+        // lParam, so the existing handler needs no change.
+        var version = NewTrayData();
+        version.uVersionOrTimeout = NOTIFYICON_VERSION_4;
+        Shell_NotifyIconW(NIM_SETVERSION, ref version);
     }
 
     private void UpdateTray()
@@ -681,7 +733,7 @@ internal sealed class Widget : IDisposable
         if (!_trayAdded) return;
 
         var data = NewTrayData();
-        data.uFlags = NIF_ICON | NIF_TIP;
+        data.uFlags = NIF_ICON | NIF_TIP | NIF_SHOWTIP;
         data.hIcon = _iconSmall;
         SetTip(ref data, TrayTip());
 
@@ -697,6 +749,50 @@ internal sealed class Widget : IDisposable
         _trayAdded = false;
     }
 
+    /// <summary>
+    /// The chooser lists the limit rows the CLI actually reported, so a new window like a
+    /// model-specific weekly cap appears here without a code change.
+    /// </summary>
+    private IntPtr BuildLimitMenu()
+    {
+        _limitLabels = new List<string>();
+
+        foreach (var s in _statuses)
+            foreach (var limit in s.Limits)
+                if (!_limitLabels.Contains(limit.Label))
+                    _limitLabels.Add(limit.Label);
+
+        var menu = CreatePopupMenu();
+        if (menu == IntPtr.Zero) return IntPtr.Zero;
+
+        AppendMenuW(menu, MF_STRING | (_config.IconLimit is null ? MF_CHECKED : 0),
+            new IntPtr(IdIconLimitEverything), "Everything that fits");
+
+        if (_limitLabels.Count > 0)
+            AppendMenuW(menu, MF_SEPARATOR, IntPtr.Zero, null);
+
+        for (var i = 0; i < _limitLabels.Count; i++)
+        {
+            var active = _config.IconLimit is string fragment &&
+                         _limitLabels[i].Contains(fragment, StringComparison.OrdinalIgnoreCase);
+
+            AppendMenuW(menu, MF_STRING | (active ? MF_CHECKED : 0),
+                new IntPtr(IdIconLimitFirst + i), MenuLabel(_limitLabels[i]));
+        }
+
+        return menu;
+    }
+
+    /// <summary>"Current week (all models)" reads as noise in a menu of them; drop the prefix.</summary>
+    private static string MenuLabel(string label)
+    {
+        var trimmed = label.StartsWith("Current ", StringComparison.OrdinalIgnoreCase)
+            ? label["Current ".Length..]
+            : label;
+
+        return trimmed.Length > 0 ? char.ToUpperInvariant(trimmed[0]) + trimmed[1..] : label;
+    }
+
     private void ShowMenu()
     {
         var menu = CreatePopupMenu();
@@ -708,6 +804,10 @@ internal sealed class Widget : IDisposable
                 AppendMenuW(menu, MF_STRING, new IntPtr(IdShowPanel), "Show panel");
 
             AppendMenuW(menu, MF_STRING, new IntPtr(IdRefresh), "Refresh now");
+            var limitMenu = BuildLimitMenu();
+            if (limitMenu != IntPtr.Zero)
+                AppendMenuW(menu, MF_STRING | MF_POPUP, limitMenu, "Icon shows");
+
             AppendMenuW(menu, MF_STRING | (_config.AlwaysOnTop ? MF_CHECKED : 0),
                 new IntPtr(IdAlwaysOnTop), "Always on top");
             AppendMenuW(menu, MF_STRING, new IntPtr(IdMinimize), "Minimise to taskbar");
@@ -733,6 +833,18 @@ internal sealed class Widget : IDisposable
 
     private void OnCommand(int id)
     {
+        if (id == IdIconLimitEverything)
+        {
+            SetIconLimit(null);
+            return;
+        }
+
+        if (id >= IdIconLimitFirst && id < IdIconLimitFirst + _limitLabels.Count)
+        {
+            SetIconLimit(_limitLabels[id - IdIconLimitFirst]);
+            return;
+        }
+
         switch (id)
         {
             case IdShowPanel:
@@ -768,6 +880,17 @@ internal sealed class Widget : IDisposable
                 PostQuitMessage(0);
                 break;
         }
+    }
+
+    private void SetIconLimit(string? label)
+    {
+        _config.IconLimit = label;
+
+        try { ConfigStore.Save(_config); } catch { }
+
+        UpdateIcon();
+        UpdateTaskbar();
+        DwmInvalidateIconicBitmaps(_hwnd);
     }
 
     private void OpenConfig()

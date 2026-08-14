@@ -66,6 +66,7 @@ First run writes `%APPDATA%\ClaudeUsageWidget\config.json`:
   "pollSeconds": 30,
   "claudePath": null,
   "alwaysOnTop": true,
+  "iconLimit": null,
   "windowX": null,
   "windowY": null,
   "accounts": [
@@ -78,6 +79,9 @@ First run writes `%APPDATA%\ClaudeUsageWidget\config.json`:
   below 10 seconds is clamped to 10; below that the widget spends most of its life starting
   processes.
 - `claudePath` — explicit path to `claude.exe`. `null` resolves from `PATH`.
+- `iconLimit` — which limit the icon, taskbar bar and tooltip report, matched against a row
+  label: `"session"`, `"all models"`, a model name. `null` shows everything the icon has room
+  for. Easier set from the **Icon shows** menu, which lists the rows your CLI actually reported.
 - `windowX` / `windowY` — panel position, saved automatically when you drag it. `null` means
   "lower-right of the work area". Nullable rather than a `-1` sentinel because monitors placed
   left of or above the primary one have genuinely negative coordinates.
@@ -124,10 +128,29 @@ config, and session history all live there. A fresh profile starts empty.
 - **Exit** lives in the tray icon's right-click menu, and in the panel's own right-click menu.
 - **Drag anywhere** else on the panel to move it. Position is saved.
 - **Double-click** to refresh immediately.
-- **Right-click** the panel or the tray icon for: show panel, refresh, always-on-top toggle,
-  minimise, **Edit config…**, **Reload config**, exit.
+- **Right-click** the panel or the tray icon for: show panel, refresh, **Icon shows ▸**,
+  always-on-top toggle, minimise, **Edit config…**, **Reload config**, exit.
 - Colours: green below 75%, amber below 90%, red at or above 90%. The taskbar progress bar
   uses the matching normal/paused/error state.
+- The title bar shows how stale the reading is — `just now`, `12s ago`, `3m ago`.
+
+## What the icon shows
+
+Two things can stop you working, on different horizons: the session window, which resets in
+hours, and the weekly one, which locks you out for days. Both belong in the icon, and a 16px
+tray icon has room for only so much, so detail is dropped in a fixed order as accounts are
+added:
+
+| accounts | icon |
+|---|---|
+| 1 | week digits, with the session as a strip along the top edge |
+| 2 | a bar pair per account — session above week, matching the panel's row order |
+| 3–4 | one bar per account, week only |
+| 5+ | digits for the worst week |
+
+Colour always means severity and never identity. Accounts are told apart by position, in config
+order, which makes the panel the icon's legend. **Icon shows ▸** overrides all of this with a
+single chosen limit, one bar per account.
 
 Windows 11 hides newly registered tray icons by default. Click the `^` chevron in the
 notification area and drag the badge out to pin it.
