@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+
+  pull_request:
+
+jobs:
+  build:
+    # Windows only, and not by preference: the app is raw Win32 and the NativeAOT toolchain
+    # links against MSVC. There is no portable half worth testing on Linux.
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      # The parser is the part that breaks when the Claude Code CLI changes its `/usage`
+      # layout, so it is the part with tests.
+      - run: dotnet test tests/ClaudeUsageWidget.Tests -c Release
+
+      # ILCompiler shells out to vswhere to find the MSVC linker and does not search the
+      # Visual Studio Installer directory itself. It happens to be on PATH on the hosted
+      # image today; adding it explicitly means a change there fails loudly here instead.
+      - name: Put vswhere on PATH
+        run: echo "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer" >> $env:GITHUB_PATH
+
+      # Publish, not build: AOT compilation only happens on publish, and a link failure is
+      # exactly the kind of break that would otherwise reach a release.
+      - run: dotnet publish -c Release -o dist
+
+      - name: Report the binary size
+        run: |
+          $exe = Get-Item dist\ClaudeUsageWidget.exe
+          $mb = [math]::Round($exe.Length / 1MB, 2)
+          echo "ClaudeUsageWidget.exe is $mb MB" >> $env:GITHUB_STEP_SUMMARY
+          # Size is the whole reason this is NativeAOT rather than WinForms. A regression
+          # past 15 MB means something pulled the framework back in.
+          if ($mb -gt 15) { throw "Binary grew to $mb MB — expected well under 15 MB" }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ClaudeUsageWidget
+          path: dist/ClaudeUsageWidget.exe
