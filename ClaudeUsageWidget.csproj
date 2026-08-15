@@ -9,7 +9,7 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <AssemblyName>ClaudeUsageWidget</AssemblyName>
     <RootNamespace>ClaudeUsageWidget</RootNamespace>
-    <Version>0.6.0</Version>
+    <!-- Version lives in Directory.Build.props. -->
 
     <!-- NativeAOT: no WinForms/WPF, raw Win32. Buys a ~4 MB self-contained exe. -->
     <PublishAot>true</PublishAot>
@@ -29,8 +29,15 @@
 
   <ItemGroup>
     <!-- The app project sits at the repo root, so its default glob would otherwise compile
-         the test project's sources into the app. -->
+         the test project's and the portable projects' sources into the app. -->
     <Compile Remove="tests/**" />
+    <Compile Remove="src/**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Everything that is not Win32: config, providers, limit model. Shared with the CLI so the
+         two can never disagree about what your usage is. -->
+    <ProjectReference Include="src\AgentUsage.Core\AgentUsage.Core.csproj" />
   </ItemGroup>
 
 </Project>

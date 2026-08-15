@@ -1,9 +1,9 @@
 using System.Globalization;
 
-namespace ClaudeUsageWidget;
+namespace AgentUsage;
 
 /// <summary>
-/// Turns the reset stamp the CLI prints into something a reader can act on.
+/// Turns the reset stamp a provider prints into something a reader can act on.
 ///
 /// "Aug 15, 2:59am" answers the wrong question when the answer you want is whether to start
 /// another task now. A countdown answers it directly, but only stays useful while the moment
@@ -63,8 +63,25 @@ public static class ResetTime
 
         if (!TryParse(reset, now, out var at)) return stamp;
 
-        var remaining = at - now;
+        return Describe(at - now, stamp);
+    }
 
+    /// <summary>
+    /// The same wording from an exact moment, which is what a provider that reports a timestamp
+    /// gives us — no prose to parse and no chance of reading it wrong.
+    /// </summary>
+    public static string Describe(DateTimeOffset resetsAt, DateTimeOffset now)
+    {
+        var local = resetsAt.ToLocalTime();
+        var stamp = local.ToString("MMM d, h:mmtt", CultureInfo.InvariantCulture)
+            .Replace("AM", "am", StringComparison.Ordinal)
+            .Replace("PM", "pm", StringComparison.Ordinal);
+
+        return Describe(resetsAt - now, stamp);
+    }
+
+    private static string Describe(TimeSpan remaining, string stamp)
+    {
         if (remaining <= TimeSpan.Zero) return "any moment";
         if (remaining >= CountdownHorizon) return stamp;
         if (remaining < TimeSpan.FromMinutes(1)) return "in under a minute";

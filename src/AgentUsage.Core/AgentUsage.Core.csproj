@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- Deliberately not net10.0-windows: this is the half that has to run on a Mac mini in CI
+         and inside a waybar module. Anything needing Win32 belongs in the widget project. -->
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>AgentUsage</RootNamespace>
+    <AssemblyName>AgentUsage.Core</AssemblyName>
+
+    <!-- Both consumers publish NativeAOT, so the analyser has to run here too: a reflection-based
+         serialiser that only fails at runtime on the target machine is exactly what we can't debug. -->
+    <IsAotCompatible>true</IsAotCompatible>
+    <JsonSerializerIsReflectionEnabledByDefault>false</JsonSerializerIsReflectionEnabledByDefault>
+  </PropertyGroup>
+
+</Project>

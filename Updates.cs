@@ -1,9 +1,24 @@
 using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using static ClaudeUsageWidget.Native;
 
 namespace ClaudeUsageWidget;
+
+/// <summary>The one field of the GitHub release payload this needs.</summary>
+public sealed class ReleaseInfo
+{
+    [JsonPropertyName("tag_name")] public string? TagName { get; set; }
+}
+
+/// <summary>
+/// The widget's own serialisation context. Separate from the core's: this type belongs to the
+/// Windows update check, which is not something the portable half knows about.
+/// </summary>
+[JsonSourceGenerationOptions(PropertyNameCaseInsensitive = true)]
+[JsonSerializable(typeof(ReleaseInfo))]
+internal partial class WidgetJson : JsonSerializerContext;
 
 /// <summary>
 /// Checks whether a newer release exists. One unauthenticated GET to the GitHub API, at most
@@ -68,7 +83,7 @@ public static class Updates
             var body = Get(ApiHost, ApiPath, ct);
             if (body is null) return null;
 
-            var release = JsonSerializer.Deserialize(body, JsonContext.Default.ReleaseInfo);
+            var release = JsonSerializer.Deserialize(body, WidgetJson.Default.ReleaseInfo);
 
             return string.IsNullOrWhiteSpace(release?.TagName) ? null : release.TagName;
         }

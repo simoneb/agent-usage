@@ -1,6 +1,8 @@
 using System.Collections.Concurrent;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using AgentUsage;
+using AgentUsage.Providers;
 using static ClaudeUsageWidget.Native;
 
 namespace ClaudeUsageWidget;
@@ -62,11 +64,12 @@ internal sealed class Widget : IDisposable
     private readonly ConcurrentDictionary<string, AuthStatus> _authCache = new();
     private readonly CancellationTokenSource _shutdown = new();
     private int _refreshing;
+    private int _refreshAgain;
 
     public Widget()
     {
         _config = ConfigStore.Load();
-        _claudePath = UsageProbe.ResolveClaudePath(_config.ClaudePath);
+        _claudePath = ClaudeProvider.ResolveClaudePath(_config.ClaudePath);
         _fonts = new FontSet(1.0);
         _instance = this;
     }
@@ -220,7 +223,7 @@ internal sealed class Widget : IDisposable
 
             case WM_NCLBUTTONDBLCLK:
             case WM_LBUTTONDBLCLK:
-                StartRefresh();
+                StartRefresh(force: true);
                 return IntPtr.Zero;
 
             case WM_NCRBUTTONUP:
@@ -251,6 +254,10 @@ internal sealed class Widget : IDisposable
 
             case WM_APP_REFRESHED:
                 OnRefreshed();
+                return IntPtr.Zero;
+
+            case WM_APP_REFRESH_NOW:
+                StartRefresh();
                 return IntPtr.Zero;
 
             case WM_EXITSIZEMOVE:
@@ -358,21 +365,31 @@ internal sealed class Widget : IDisposable
 
     // ---- data ------------------------------------------------------------
 
-    private void StartRefresh()
+    /// <param name="force">
+    /// This refresh was asked for, rather than being the timer coming round again. A poll
+    /// already in flight is running against whatever the config was when it started, so
+    /// dropping the request would mean an explicit Refresh or Reload doing nothing at all —
+    /// silently, and only when the timing happens to overlap.
+    /// </param>
+    private void StartRefresh(bool force = false)
     {
-        if (Interlocked.Exchange(ref _refreshing, 1) == 1) return;
+        if (Interlocked.Exchange(ref _refreshing, 1) == 1)
+        {
+            // Queued rather than run alongside: two probes in flight can finish out of order,
+            // and the older one landing last would put back exactly what the reload removed.
+            if (force) Interlocked.Exchange(ref _refreshAgain, 1);
+            return;
+        }
 
-        var accounts = _config.Accounts.ToArray();
-        var claudePath = _claudePath;
+        var config = _config;
+        var accounts = config.Accounts.ToArray();
         var hwnd = _hwnd;
 
         _ = Task.Run(async () =>
         {
             try
             {
-                // All accounts probed concurrently: separate processes, separate config dirs.
-                var results = await Task.WhenAll(Array.ConvertAll(
-                    accounts, a => UsageProbe.ProbeAsync(a, claudePath, CachedAuth(a), _shutdown.Token)));
+                var results = await UsageService.ProbeAllAsync(config, CachedAuth, _shutdown.Token);
 
                 foreach (var result in results) RememberAuth(result);
 
@@ -390,8 +407,14 @@ internal sealed class Widget : IDisposable
             finally
             {
                 Interlocked.Exchange(ref _refreshing, 0);
+
                 if (!_shutdown.IsCancellationRequested)
+                {
                     PostMessageW(hwnd, WM_APP_REFRESHED, IntPtr.Zero, IntPtr.Zero);
+
+                    if (Interlocked.Exchange(ref _refreshAgain, 0) == 1)
+                        PostMessageW(hwnd, WM_APP_REFRESH_NOW, IntPtr.Zero, IntPtr.Zero);
+                }
             }
         });
     }
@@ -423,7 +446,10 @@ internal sealed class Widget : IDisposable
 
     private string? UpdateNotice() => _updateTag is string tag ? $"{tag} available" : null;
 
-    private static string AuthKey(AccountConfig account) => account.ConfigDir ?? string.Empty;
+    // Keyed by provider as well as directory: two accounts can legitimately share a config dir
+    // of null while being different tools entirely.
+    private static string AuthKey(AccountConfig account) =>
+        $"{ProviderIds.Normalise(account.Provider)}:{account.ConfigDir}";
 
     private AuthStatus? CachedAuth(AccountConfig account) =>
         _authCache.TryGetValue(AuthKey(account), out var auth) ? auth : null;
@@ -906,7 +932,7 @@ internal sealed class Widget : IDisposable
                 break;
 
             case IdRefresh:
-                StartRefresh();
+                StartRefresh(force: true);
                 break;
 
             case IdGetUpdate:
@@ -976,13 +1002,24 @@ internal sealed class Widget : IDisposable
         try
         {
             _config = ConfigStore.Load();
-            _claudePath = UsageProbe.ResolveClaudePath(_config.ClaudePath);
+            _claudePath = ClaudeProvider.ResolveClaudePath(_config.ClaudePath);
+
+            // Drop readings for accounts that are gone, and redraw now rather than at the end of
+            // whichever poll finishes next. An account removed from the file has to leave the
+            // panel when you press Reload, or pressing Reload looks like it did nothing.
+            _statuses = Readings.ForAccounts(_config.Accounts, _statuses);
+
+            ResizeToContent();
+            InvalidateRect(_hwnd, IntPtr.Zero, false);
+            UpdateTaskbar();
+            UpdateIcon();
+            DwmInvalidateIconicBitmaps(_hwnd);
 
             KillTimer(_hwnd, PollTimerId);
             SetTimer(_hwnd, PollTimerId, (uint)(_config.PollSeconds * 1000), IntPtr.Zero);
 
             ApplyTopmost();
-            StartRefresh();
+            StartRefresh(force: true);
         }
         catch
         {

@@ -1,0 +1,26 @@
+// Waybar snippet. Merge these into your own ~/.config/waybar/config.jsonc.
+//
+// The interval is 60s rather than something snappier because each Claude account in your config
+// costs a CLI launch of roughly two and a half seconds. Codex accounts are a file read and cost
+// nothing, so a Codex-only setup can poll as fast as you like.
+{
+  "modules-right": [
+    "custom/agent-usage"
+    // ... your other modules
+  ],
+
+  "custom/agent-usage": {
+    "exec": "$HOME/.config/waybar/scripts/agent-usage-waybar.sh",
+    "return-type": "json",
+    "interval": 60,
+    "tooltip": true,
+    "on-click": "agent-usage" // whatever you want; a terminal report, say
+  }
+}
+
+// And in style.css, if you want the colours to mean what they mean in the widget:
+//
+//   #custom-agent-usage.ok       { color: #62cb82; }
+//   #custom-agent-usage.warning  { color: #ffb02e; }
+//   #custom-agent-usage.critical { color: #ff6b6b; }
+//   #custom-agent-usage.unknown  { color: #6e6e78; }

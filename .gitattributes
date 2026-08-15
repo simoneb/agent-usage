@@ -1,0 +1,5 @@
+# The integration scripts run on macOS and Linux. Checked out with CRLF on a Windows machine
+# and committed back, they break with "bad interpreter: /bin/bash^M" on every other platform —
+# and the person who has to debug that is never the person who made the commit.
+*.sh text eol=lf
+*.bash text eol=lf

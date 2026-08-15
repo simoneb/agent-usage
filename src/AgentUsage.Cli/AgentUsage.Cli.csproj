@@ -1,0 +1,50 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>AgentUsage.Cli</RootNamespace>
+
+    <!-- The command people type. Kept separate from the Windows widget's name because this one
+         reports Codex too, and a binary called claude-usage printing Codex rows is a lie. -->
+    <AssemblyName>agent-usage</AssemblyName>
+    <!-- Version lives in Directory.Build.props. -->
+
+    <PublishAot>true</PublishAot>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <UseSystemResourceKeys>true</UseSystemResourceKeys>
+    <EventSourceSupport>false</EventSourceSupport>
+    <MetadataUpdaterSupport>false</MetadataUpdaterSupport>
+    <StackTraceSupport>false</StackTraceSupport>
+    <MetricsSupport>false</MetricsSupport>
+    <JsonSerializerIsReflectionEnabledByDefault>false</JsonSerializerIsReflectionEnabledByDefault>
+    <OptimizationPreference>Size</OptimizationPreference>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\AgentUsage.Core\AgentUsage.Core.csproj" />
+  </ItemGroup>
+
+  <!-- Bakes the version in as a constant rather than reading it back at runtime. Reflection over
+       assembly attributes is the usual way and it survives NativeAOT, but a compile-time constant
+       cannot be trimmed away or come back empty on a platform with no version resource, and a
+       version flag that prints nothing is a bad first impression. -->
+  <Target Name="GenerateVersionConstant" BeforeTargets="BeforeCompile">
+    <PropertyGroup>
+      <VersionConstantFile>$(IntermediateOutputPath)Version.g.cs</VersionConstantFile>
+    </PropertyGroup>
+
+    <WriteLinesToFile
+      File="$(VersionConstantFile)"
+      Lines="namespace AgentUsage.Cli%3B internal static class ThisAssembly { public const string Version = &quot;$(Version)&quot;%3B }"
+      Overwrite="true"
+      WriteOnlyWhenDifferent="true" />
+
+    <ItemGroup>
+      <Compile Include="$(VersionConstantFile)" />
+    </ItemGroup>
+  </Target>
+
+</Project>

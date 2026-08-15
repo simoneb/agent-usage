@@ -1,7 +1,7 @@
-using ClaudeUsageWidget;
+using AgentUsage;
 using Xunit;
 
-namespace ClaudeUsageWidget.Tests;
+namespace AgentUsage.Tests;
 
 /// <summary>
 /// Reset stamps come from the same unstable text as the percentages, and a countdown built on a
