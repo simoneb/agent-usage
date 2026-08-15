@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>claude-usage-widget — how much of your week is left</title>
-<meta name="description" content="A Windows desktop panel and taskbar badge for your Claude subscription limits. Reads them from the Claude Code CLI: no browser session, no scraped credentials, no tokens spent.">
+<meta name="description" content="A Windows desktop panel and taskbar badge for your Claude Code and Codex subscription limits, plus a CLI for macOS and Linux status bars. Reads them from the tools you installed: no browser session, no scraped credentials, no tokens spent.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wdth,wght@12..96,75..100,500;12..96,75..100,700;12..96,75..100,800&family=Martian+Mono:wght@400;600&display=swap" rel="stylesheet">
@@ -385,6 +385,7 @@
       <a href="#how">How it reads</a>
       <a href="#accounts">Accounts</a>
       <a href="#icon">The icon</a>
+      <a href="#cli">Other platforms</a>
       <a href="#install">Install</a>
       <a href="https://github.com/simoneb/claude-usage-widget">GitHub</a>
     </nav>
@@ -395,14 +396,14 @@
       <p class="label">Windows · one file · no runtime</p>
       <h1>How much of your week <em>is left.</em></h1>
       <p class="thesis">
-        A desktop panel and a taskbar badge for your Claude subscription limits.
-        It gets the numbers by asking the Claude Code CLI — <strong>no browser session,
+        A desktop panel and a taskbar badge for your Claude Code and Codex subscription limits.
+        It gets the numbers from the tools you already installed — <strong>no browser session,
         no credentials read, no tokens spent.</strong>
       </p>
 
       <div class="actions">
         <a class="download" href="https://github.com/simoneb/claude-usage-widget/releases/latest/download/ClaudeUsageWidget-win-x64.exe">
-          Download for Windows <span class="size">2.3 MB</span>
+          Download for Windows <span class="size">2.8 MB</span>
         </a>
         <a class="secondary" href="https://github.com/simoneb/claude-usage-widget">Read the source</a>
       </div>
@@ -412,6 +413,8 @@
         <a href="https://github.com/simoneb/claude-usage-widget/releases/latest/download/ClaudeUsageWidget-win-arm64.exe">the arm64 build</a>
         instead — or the zips and checksums from
         <a href="https://github.com/simoneb/claude-usage-widget/releases/latest">the release page</a>.
+        On a Mac or a Linux box, <a href="#cli">there is a CLI</a> that feeds your menu bar the
+        same readings.
       </p>
 
       <ul class="specs">
@@ -499,10 +502,10 @@
   <section id="how">
     <div class="section-head">
       <p class="label">Where the number comes from</p>
-      <h2>It asks the CLI you already trust.</h2>
+      <h2>It asks the tools you already trust.</h2>
       <p>
         Every tool that shows this number has to get it from somewhere. Most reach for a
-        browser session. This one runs a command.
+        browser session. This one runs a command, or reads a file that command wrote.
       </p>
     </div>
 
@@ -538,6 +541,43 @@
         <p>
           The CLI's text layout is not a contract. If it changes, the panel says it could not
           parse rather than showing a figure it guessed.
+        </p>
+      </div>
+    </div>
+
+    <div class="section-head" style="margin-top: 3rem;">
+      <p class="label">And Codex</p>
+      <h2>Free, because it is already on disk.</h2>
+      <p>
+        Codex has no <code>/usage</code> to ask. But it writes the rate limits the API returns
+        into its own session transcript on every turn, so the figure is already sitting in
+        <code>~/.codex/sessions</code> — no process to launch, nothing to authenticate against.
+      </p>
+    </div>
+
+    <div class="grid three" style="margin-top: 1.75rem;">
+      <div class="card">
+        <p class="label"><span class="dot ok"></span>Cheaper than free</p>
+        <h3>A file read, not a launch</h3>
+        <p>
+          A Claude account costs a CLI startup, about two and a half seconds. A Codex account
+          costs one read of the tail of a file.
+        </p>
+      </div>
+      <div class="card">
+        <p class="label"><span class="dot warn"></span>Honestly stale</p>
+        <h3>As fresh as your last turn</h3>
+        <p>
+          Codex only records limits while you use Codex. So the panel says how old the reading
+          is — <em>measured 3h ago</em> — instead of implying it is live.
+        </p>
+      </div>
+      <div class="card">
+        <p class="label"><span class="dot warn"></span>Knows when to shut up</p>
+        <h3>An expired window shows nothing</h3>
+        <p>
+          Leave Codex alone for a week and last week's <em>93% used</em> describes a week that is
+          over. That reads <em>stale</em>, never as a live 93%.
         </p>
       </div>
     </div>
@@ -610,6 +650,64 @@ claude auth login</pre>
     </p>
   </section>
 
+  <section id="cli">
+    <div class="section-head">
+      <p class="label">macOS and Linux</p>
+      <h2>The panel is Windows. The numbers are not.</h2>
+      <p>
+        The widget is raw Win32 and stays that way. But the half that reads your usage has no
+        Windows in it at all, so it also ships as <code>agent-usage</code> — one self-contained
+        binary that prints the same readings wherever you run it.
+      </p>
+    </div>
+
+    <pre><span class="c">$</span> agent-usage
+work · claude · max
+  session   1%   resets in 4h 16m
+  week      0%   resets Aug 22, 11:59am
+
+codex · codex · plus  <span class="c">(measured 3h ago)</span>
+  session  12%   resets in 1h 4m
+  week      3%   resets Aug 18, 2pm
+
+<span class="c">$</span> agent-usage --brief
+work 0% · codex 3%</pre>
+
+    <div class="grid three" style="margin-top: 1.75rem;">
+      <div class="card">
+        <p class="label"><span class="dot ok"></span>macOS</p>
+        <h3>xbar and SwiftBar</h3>
+        <p>
+          A plugin ships in the repo. Drop it in, <code>chmod +x</code>, done — no jq, no python,
+          no runtime, because the binary does the formatting.
+        </p>
+      </div>
+      <div class="card">
+        <p class="label"><span class="dot ok"></span>Linux</p>
+        <h3>waybar, tmux, Starship</h3>
+        <p>
+          A waybar module with tooltips and threshold colours, and one-liners for tmux status
+          bars and shell prompts.
+        </p>
+      </div>
+      <div class="card">
+        <p class="label"><span class="dot ok"></span>Anything else</p>
+        <h3><code>--json</code>, and it is a contract</h3>
+        <p>
+          A versioned snapshot with every window, reset moment and reading age. Fields get added,
+          never repurposed.
+        </p>
+      </div>
+    </div>
+
+    <p style="margin-top: 1.5rem;">
+      One detail worth knowing if you build on it: a percentage can come back null, and that is
+      information rather than a gap. It means the limit cannot honestly produce a proportion —
+      a count with no ceiling, or a window that has already reset. Drawing it as zero would turn
+      <em>I don't know</em> into <em>you have used none of it</em>.
+    </p>
+  </section>
+
   <section id="install">
     <div class="section-head">
       <p class="label">Install</p>
@@ -621,13 +719,14 @@ claude auth login</pre>
         <h3>Have Claude Code on your PATH</h3>
         <p>
           The widget shells out to it. If <code>claude auth status</code> works in a terminal,
-          you are set.
+          you are set. Codex accounts need nothing at all beyond a <code>~/.codex</code> you
+          have used at least once.
         </p>
       </li>
       <li>
         <h3>Download the exe and run it</h3>
         <p>
-          One self-contained file, about 2.3 MB. Nothing to install and no .NET runtime to
+          One self-contained file, about 2.8 MB. Nothing to install and no .NET runtime to
           add. It is unsigned, so SmartScreen asks once — every release publishes a
           <code>SHA256SUMS.txt</code> you can check against.
         </p>
@@ -658,10 +757,18 @@ claude auth login</pre>
         </span>
       </li>
       <li>
-        <b>It depends on a CLI output format that can change.</b>
+        <b>It depends on formats that can change.</b>
         <span>
-          Nothing here is a published API. A layout change breaks the parser, and the fix is a
-          one-line pattern in <code>UsageProbe</code>.
+          Neither Claude's <code>/usage</code> text nor Codex's transcript records are a
+          published API. A change breaks the parser, and both fail to an error rather than to a
+          number.
+        </span>
+      </li>
+      <li>
+        <b>A Codex reading is only as fresh as your last Codex turn.</b>
+        <span>
+          Nothing records a limit while you are not using it. The panel shows the age of the
+          reading, and discards it entirely once the window it describes has reset.
         </span>
       </li>
       <li>
@@ -680,11 +787,13 @@ claude auth login</pre>
         </span>
       </li>
       <li>
-        <b>Windows only, and unapologetically so.</b>
+        <b>The panel is Windows only, and unapologetically so.</b>
         <span>
-          The UI is raw Win32 and GDI, compiled ahead of time. That is what keeps it a 2.3 MB
-          binary instead of a 68 MB one, and it is also why there is no macOS or Linux build to
-          port — there is no cross-platform layer to port.
+          The UI is raw Win32 and GDI, compiled ahead of time. That is what keeps it under 3 MB
+          instead of 68, and the taskbar progress bar and hover preview have no counterpart
+          elsewhere to port to. On macOS and Linux you get
+          <a href="#cli">the CLI and your own status bar</a> instead, which is a smaller promise
+          honestly kept.
         </span>
       </li>
       <li>

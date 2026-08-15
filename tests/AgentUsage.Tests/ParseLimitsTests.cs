@@ -1,7 +1,7 @@
-using ClaudeUsageWidget;
+using AgentUsage.Providers;
 using Xunit;
 
-namespace ClaudeUsageWidget.Tests;
+namespace AgentUsage.Tests;
 
 /// <summary>
 /// The `/usage` text layout is the one thing here that is not a contract. These tests pin the
@@ -27,7 +27,7 @@ public class ParseLimitsTests
     [Fact]
     public void ReadsEveryLimitRowFromRealOutput()
     {
-        var rows = UsageProbe.ParseLimits(RealOutput);
+        var rows = ClaudeProvider.ParseLimits(RealOutput);
 
         Assert.Equal(3, rows.Count);
 
@@ -47,7 +47,7 @@ public class ParseLimitsTests
     {
         // "100% of your usage was at >150k context" is a percentage on its own line and would
         // be a plausible false positive for a looser pattern.
-        var rows = UsageProbe.ParseLimits(RealOutput);
+        var rows = ClaudeProvider.ParseLimits(RealOutput);
 
         Assert.DoesNotContain(rows, r => r.Percent == 100);
     }
@@ -56,7 +56,7 @@ public class ParseLimitsTests
     public void PicksUpLimitRowsThisVersionHasNeverSeen()
     {
         // New model-specific windows appear without warning; they must not need a code change.
-        var rows = UsageProbe.ParseLimits(
+        var rows = ClaudeProvider.ParseLimits(
             "Current week (Some Future Model): 12% used · resets Sep 1, 9am (UTC)");
 
         var row = Assert.Single(rows);
@@ -67,7 +67,7 @@ public class ParseLimitsTests
     [Fact]
     public void AcceptsARowWithNoResetTime()
     {
-        var row = Assert.Single(UsageProbe.ParseLimits("Current session: 40% used"));
+        var row = Assert.Single(ClaudeProvider.ParseLimits("Current session: 40% used"));
 
         Assert.Equal(40, row.Percent);
         Assert.Null(row.Resets);
@@ -80,6 +80,6 @@ public class ParseLimitsTests
     [InlineData("Current session: forty percent used")]   // non-numeric
     public void ReturnsNothingRatherThanGuessing(string text)
     {
-        Assert.Empty(UsageProbe.ParseLimits(text));
+        Assert.Empty(ClaudeProvider.ParseLimits(text));
     }
 }

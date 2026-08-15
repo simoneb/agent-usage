@@ -7,9 +7,27 @@ on:
   pull_request:
 
 jobs:
-  # Windows only, and not by preference: the app is raw Win32 and the NativeAOT toolchain
-  # links against MSVC. There is no portable half worth testing on Linux.
-  test:
+  # The portable half — config, providers, the limit model — runs on every platform it ships to.
+  # This is the only place that code is executed anywhere but a user's machine, so it is the
+  # evidence that the macOS and Linux builds are more than "it compiled".
+  test-portable:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+
+      # The parsers are the parts that break when a CLI changes what it prints: Claude's /usage
+      # text and Codex's transcript records. Both are pinned here.
+      - run: dotnet test tests/AgentUsage.Tests -c Release
+
+  # Autostart and the update check are Win32 and registry, so their tests only make sense here.
+  test-windows:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v7
@@ -17,11 +35,9 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
-      # The parser is the part that breaks when the Claude Code CLI changes its `/usage`
-      # layout, so it is the part with tests.
       - run: dotnet test tests/ClaudeUsageWidget.Tests -c Release
 
-  build:
+  build-widget:
     runs-on: windows-latest
     strategy:
       fail-fast: false
@@ -43,7 +59,7 @@ jobs:
 
       # Publish, not build: AOT compilation only happens on publish, and a link failure is
       # exactly the kind of break that would otherwise reach a release.
-      - run: dotnet publish -c Release -r ${{ matrix.rid }} -o dist
+      - run: dotnet publish ClaudeUsageWidget.csproj -c Release -r ${{ matrix.rid }} -o dist
 
       - name: Report the binary size
         run: |
@@ -58,3 +74,103 @@ jobs:
         with:
           name: ClaudeUsageWidget-${{ matrix.rid }}
           path: dist/ClaudeUsageWidget.exe
+
+  # NativeAOT cannot cross-compile between operating systems, so each target builds on its own
+  # runner. That constraint is also the feature: every one of these binaries is built and then
+  # actually run on the platform it ships to.
+  build-cli:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            rid: linux-x64
+          - os: ubuntu-24.04-arm
+            rid: linux-arm64
+          - os: macos-latest
+            rid: osx-arm64
+          - os: windows-latest
+            rid: win-x64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+
+      # ILCompiler links with clang against zlib on Linux. Present on the hosted images today;
+      # asking for it explicitly turns a future image change into a clear failure here.
+      - name: Install the native toolchain
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y clang zlib1g-dev
+
+      - name: Put vswhere on PATH
+        if: runner.os == 'Windows'
+        run: echo "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer" >> $env:GITHUB_PATH
+
+      - run: dotnet publish src/AgentUsage.Cli -c Release -r ${{ matrix.rid }} -o dist
+
+      # The smoke test that matters: run the thing. A binary that links but cannot read a config
+      # or serialise a snapshot on this platform fails here rather than on someone's laptop.
+      # No CLI is installed on a runner, so every account reports an error — and reporting that
+      # error as well-formed output, with exit 0, is precisely the contract status bars rely on.
+      - name: Run it
+        if: runner.os != 'Windows'
+        run: |
+          set -euo pipefail
+          BIN=dist/agent-usage
+          "$BIN" --version
+          "$BIN" --config-path
+          "$BIN" --brief
+          "$BIN" --json | tee /dev/stderr | jq -e '.schemaVersion == 1 and (.accounts | length) >= 1' > /dev/null
+          echo "smoke test passed on ${{ matrix.rid }}" >> $GITHUB_STEP_SUMMARY
+
+      - name: Run it
+        if: runner.os == 'Windows'
+        run: |
+          .\dist\agent-usage.exe --version
+          .\dist\agent-usage.exe --brief
+          $json = .\dist\agent-usage.exe --json | ConvertFrom-Json
+          if ($json.schemaVersion -ne 1) { throw "unexpected schema version" }
+
+      - name: Report the binary size
+        shell: bash
+        run: |
+          BIN=dist/agent-usage
+          [ -f "$BIN" ] || BIN=dist/agent-usage.exe
+          BYTES=$(wc -c < "$BIN")
+          echo "${{ matrix.rid }}: $((BYTES / 1024 / 1024)) MB" >> $GITHUB_STEP_SUMMARY
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: agent-usage-${{ matrix.rid }}
+          path: |
+            dist/agent-usage
+            dist/agent-usage.exe
+
+  # The integration scripts are shipped to people who will run them unmodified.
+  lint-integrations:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Shellcheck
+        run: find integrations -name '*.sh' -print0 | xargs -0 shellcheck
+
+      - name: The waybar filter turns a snapshot into what waybar expects
+        run: |
+          set -euo pipefail
+
+          # agent-usage is not installed here, so the filter is exercised against a fixture. A
+          # typo in it would otherwise show up as an empty module on someone's bar.
+          fixture='{"schemaVersion":1,"accounts":[
+            {"label":"work","provider":"claude","headlinePercent":93,
+             "headline":{"display":"93%"},"limits":[{"label":"Current week","display":"93%"}],
+             "ageSeconds":10},
+            {"label":"codex","provider":"codex","error":"no Codex usage recorded yet"}]}'
+
+          out=$(jq -c -f integrations/waybar/waybar.jq <<<"$fixture")
+          echo "$out"
+
+          jq -e '.text == "work 93% · codex !" and .percentage == 93 and .class == "critical"' \
+            <<<"$out" > /dev/null

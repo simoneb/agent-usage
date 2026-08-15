@@ -1,3 +1,5 @@
+using AgentUsage;
+using AgentUsage.Providers;
 using static ClaudeUsageWidget.Native;
 
 namespace ClaudeUsageWidget;
@@ -159,7 +161,7 @@ internal static class Renderer
             else
             {
                 h += s.Limits.Count * S(24, scale);
-                h += ResetGroups(s).Count * S(16, scale);
+                h += ResetGroups(s, DateTimeOffset.Now).Count * S(16, scale);
             }
 
             if (i < statuses.Count - 1) h += S(16, scale);       // divider gap
@@ -225,7 +227,10 @@ internal static class Renderer
             y += S(20, scale);
 
             SelectObject(hdc, fonts.Sub);
-            var subtitle = s.Email ?? s.Account.ConfigDir ?? "default profile";
+
+            // With more than one tool on the panel, which tool a row belongs to matters more
+            // than which directory it came from — Codex has no email to show in the first place.
+            var subtitle = s.Email ?? Subtitle(s);
             DrawLine(hdc, subtitle, padX, y, contentWidth, S(16, scale), SubColor, DT_LEFT);
             y += S(16, scale) + S(6, scale);
 
@@ -246,11 +251,11 @@ internal static class Renderer
 
                 SelectObject(hdc, fonts.Sub);
 
-                var now = DateTime.Now;
+                var now = DateTimeOffset.Now;
 
-                foreach (var (labels, reset) in ResetGroups(s))
+                foreach (var (labels, text) in ResetGroups(s, now))
                 {
-                    DrawLine(hdc, $"{labels} resets {ResetTime.Describe(reset, now)}",
+                    DrawLine(hdc, $"{labels} resets {text}",
                         padX, y, contentWidth, S(16, scale), MutedColor, DT_LEFT);
                     y += S(16, scale);
                 }
@@ -321,7 +326,10 @@ internal static class Renderer
         IntPtr hdc, LimitRow limit, int x, int y, int contentWidth, FontSet fonts, double scale)
     {
         var labelWidth = S(48, scale);
-        var valueWidth = S(44, scale);
+
+        // Wider than a percentage needs: a count reads "412 / 1500" and a window that has rolled
+        // over reads "stale", and both have to fit without being clipped to something misleading.
+        var valueWidth = S(58, scale);
         var rowHeight = S(24, scale);
 
         SelectObject(hdc, fonts.Label);
@@ -332,22 +340,50 @@ internal static class Renderer
         var barRight = x + contentWidth - valueWidth - S(6, scale);
         var barHeight = S(8, scale);
         var barTop = y + (rowHeight - barHeight) / 2;
-        var color = ColorFor(limit.Percent);
+
+        var percent = limit.Percent;
+        var color = percent is int p ? ColorFor(p) : MutedColor;
 
         FillRoundRect(hdc, barLeft, barTop, barRight, barTop + barHeight, TrackColor);
 
-        var fillWidth = (int)Math.Round((barRight - barLeft) * Math.Clamp(limit.Percent, 0, 100) / 100.0);
-        if (fillWidth > 0)
+        // No percentage means no bar. A limit counted in requests with no stated ceiling, or a
+        // window that has already reset, has nothing to fill a track with — and a bar drawn at
+        // zero would read as "none used", which is a different claim entirely.
+        if (percent is int value)
         {
-            // Keep the fill at least as wide as its own rounding, or the cap renders as a sliver.
-            fillWidth = Math.Max(fillWidth, barHeight);
-            FillRoundRect(hdc, barLeft, barTop, barLeft + fillWidth, barTop + barHeight, color);
+            var fillWidth = (int)Math.Round((barRight - barLeft) * Math.Clamp(value, 0, 100) / 100.0);
+            if (fillWidth > 0)
+            {
+                // Keep the fill at least as wide as its own rounding, or the cap renders as a sliver.
+                fillWidth = Math.Max(fillWidth, barHeight);
+                FillRoundRect(hdc, barLeft, barTop, barLeft + fillWidth, barTop + barHeight, color);
+            }
         }
 
         SelectObject(hdc, fonts.Value);
-        DrawLine(hdc, limit.Percent + "%", x + contentWidth - valueWidth, y, valueWidth, rowHeight,
+        DrawLine(hdc, limit.Display, x + contentWidth - valueWidth, y, valueWidth, rowHeight,
             color, DT_RIGHT | DT_VCENTER);
     }
+
+    /// <summary>
+    /// The line under an account's name when there is no email to put there. Names the tool,
+    /// and — for a provider whose figures only refresh while you are using it — how old the
+    /// reading is. Without that, a number recorded last Tuesday looks exactly like a live one.
+    /// </summary>
+    private static string Subtitle(AccountStatus s)
+    {
+        var provider = ProviderRegistry.Find(s.Provider)?.DisplayName ?? s.Provider;
+
+        if (s.MeasuredAt is DateTime at && DateTime.Now - at > TimeSpan.FromMinutes(5))
+            return $"{provider} · measured {Age(DateTime.Now - at)} ago";
+
+        return s.Account.ConfigDir is { Length: > 0 } dir ? $"{provider} · {dir}" : provider;
+    }
+
+    private static string Age(TimeSpan age) =>
+        age.TotalHours < 1 ? $"{(int)age.TotalMinutes}m"
+        : age.TotalDays < 1 ? $"{(int)age.TotalHours}h"
+        : $"{(int)age.TotalDays}d";
 
     /// <summary>"Current week (all models)" is too long for a 48px gutter; shorten to a stable key.</summary>
     private static string ShortLabel(string label)
@@ -368,27 +404,45 @@ internal static class Renderer
     /// right about one of them — and the weekly rows almost always share a reset, which is
     /// what keeps this to two lines rather than one per row.
     /// </summary>
-    private static List<(string Labels, string Reset)> ResetGroups(AccountStatus s)
+    private static List<(string Labels, string Text)> ResetGroups(AccountStatus s, DateTimeOffset now)
     {
-        var groups = new List<(string Labels, string Reset)>();
+        var groups = new List<(string Key, string Labels, string Text)>();
 
         foreach (var limit in s.Limits)
         {
-            if (limit.Resets is null) continue;
+            // A window that has already rolled over has nothing to count down to.
+            if (limit.Expired) continue;
 
-            // Grouped on the exact stamp rather than its description: two resets twenty minutes
-            // apart can both describe as "in 3h" without being the same moment.
-            var reset = ResetTime.StripZone(limit.Resets);
+            string key, text;
+
+            if (limit.ResetsAt is DateTimeOffset at)
+            {
+                // An exact moment, which is what a provider that reports a timestamp gives us.
+                key = at.ToString("O");
+                text = ResetTime.Describe(at, now);
+            }
+            else if (limit.Resets is string stamp)
+            {
+                // Grouped on the stamp rather than its description: two resets twenty minutes
+                // apart can both describe as "in 3h" without being the same moment.
+                key = ResetTime.StripZone(stamp);
+                text = ResetTime.Describe(stamp, now.LocalDateTime);
+            }
+            else
+            {
+                continue;
+            }
+
             var label = ShortLabel(limit.Label);
-            var existing = groups.FindIndex(g => g.Reset == reset);
+            var existing = groups.FindIndex(g => g.Key == key);
 
             if (existing >= 0)
-                groups[existing] = (groups[existing].Labels + " · " + label, reset);
+                groups[existing] = (key, groups[existing].Labels + " · " + label, text);
             else
-                groups.Add((label, reset));
+                groups.Add((key, label, text));
         }
 
-        return groups;
+        return groups.ConvertAll(g => (g.Labels, g.Text));
     }
 
 

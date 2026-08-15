@@ -1,6 +1,8 @@
 using System.Collections.Concurrent;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using AgentUsage;
+using AgentUsage.Providers;
 using static ClaudeUsageWidget.Native;
 
 namespace ClaudeUsageWidget;
@@ -66,7 +68,7 @@ internal sealed class Widget : IDisposable
     public Widget()
     {
         _config = ConfigStore.Load();
-        _claudePath = UsageProbe.ResolveClaudePath(_config.ClaudePath);
+        _claudePath = ClaudeProvider.ResolveClaudePath(_config.ClaudePath);
         _fonts = new FontSet(1.0);
         _instance = this;
     }
@@ -362,17 +364,15 @@ internal sealed class Widget : IDisposable
     {
         if (Interlocked.Exchange(ref _refreshing, 1) == 1) return;
 
-        var accounts = _config.Accounts.ToArray();
-        var claudePath = _claudePath;
+        var config = _config;
+        var accounts = config.Accounts.ToArray();
         var hwnd = _hwnd;
 
         _ = Task.Run(async () =>
         {
             try
             {
-                // All accounts probed concurrently: separate processes, separate config dirs.
-                var results = await Task.WhenAll(Array.ConvertAll(
-                    accounts, a => UsageProbe.ProbeAsync(a, claudePath, CachedAuth(a), _shutdown.Token)));
+                var results = await UsageService.ProbeAllAsync(config, CachedAuth, _shutdown.Token);
 
                 foreach (var result in results) RememberAuth(result);
 
@@ -423,7 +423,10 @@ internal sealed class Widget : IDisposable
 
     private string? UpdateNotice() => _updateTag is string tag ? $"{tag} available" : null;
 
-    private static string AuthKey(AccountConfig account) => account.ConfigDir ?? string.Empty;
+    // Keyed by provider as well as directory: two accounts can legitimately share a config dir
+    // of null while being different tools entirely.
+    private static string AuthKey(AccountConfig account) =>
+        $"{ProviderIds.Normalise(account.Provider)}:{account.ConfigDir}";
 
     private AuthStatus? CachedAuth(AccountConfig account) =>
         _authCache.TryGetValue(AuthKey(account), out var auth) ? auth : null;
@@ -976,7 +979,7 @@ internal sealed class Widget : IDisposable
         try
         {
             _config = ConfigStore.Load();
-            _claudePath = UsageProbe.ResolveClaudePath(_config.ClaudePath);
+            _claudePath = ClaudeProvider.ResolveClaudePath(_config.ClaudePath);
 
             KillTimer(_hwnd, PollTimerId);
             SetTimer(_hwnd, PollTimerId, (uint)(_config.PollSeconds * 1000), IntPtr.Zero);

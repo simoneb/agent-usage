@@ -1,3 +1,4 @@
+using AgentUsage;
 using static ClaudeUsageWidget.Native;
 
 namespace ClaudeUsageWidget;
