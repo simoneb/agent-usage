@@ -79,6 +79,9 @@ First run writes `%APPDATA%\ClaudeUsageWidget\config.json`:
   below 10 seconds is clamped to 10; below that the widget spends most of its life starting
   processes.
 - `claudePath` — explicit path to `claude.exe`. `null` resolves from `PATH`.
+- `checkForUpdates` — whether to ask GitHub once a day whether a newer release exists. `false`
+  means the app makes no network requests of its own at all; the panel and the right-click menu
+  simply never mention updates.
 - `iconLimit` — which limit the icon, taskbar bar and tooltip report, matched against a row
   label: `"session"`, `"all models"`, a model name. `null` shows everything the icon has room
   for. Easier set from the **Icon shows** menu, which lists the rows your CLI actually reported.
@@ -132,7 +135,9 @@ config, and session history all live there. A fresh profile starts empty.
   always-on-top toggle, minimise, **Edit config…**, **Reload config**, exit.
 - Colours: green below 75%, amber below 90%, red at or above 90%. The taskbar progress bar
   uses the matching normal/paused/error state.
-- The title bar shows how stale the reading is — `just now`, `12s ago`, `3m ago`.
+- The title bar shows how stale the reading is — `just now`, `12s ago`, `3m ago` — and, when a
+  newer release exists, `v0.6.0 available` on the right. The menu grows a **Get v0.6.0** entry
+  that opens the release page. Set `checkForUpdates` to `false` to switch this off entirely.
 - Reset times are grouped by moment, so the weekly and model windows that share one share a
   line. Anything resetting within 24 hours is counted down (`session resets in 1h 32m`);
   further out, the date is the clearer answer (`week resets Aug 21, 8:59pm`).

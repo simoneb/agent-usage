@@ -23,6 +23,7 @@ internal sealed class Widget : IDisposable
     private const int IdExit = 6;
     private const int IdShowPanel = 7;
     private const int IdAutostart = 8;
+    private const int IdGetUpdate = 9;
 
     // The limit chooser is built from whatever rows the CLI reported, so its ids are assigned
     // at menu-build time from this base.
@@ -48,6 +49,10 @@ internal sealed class Widget : IDisposable
 
     private DateTime? _lastRefreshAt;
     private string? _freshness;
+
+    private DateTime? _lastUpdateCheck;
+    private volatile string? _updateTag;
+    private int _checkingForUpdate;
 
     private int _hoverButton = Renderer.ButtonNone;
     private bool _mouseTracking;
@@ -303,7 +308,7 @@ internal sealed class Widget : IDisposable
         using (var surface = new DibSurface(client.Width, client.Height))
         {
             Renderer.Draw(surface.Hdc, surface.Width, surface.Height, _statuses, _fonts, _scale,
-                _hoverButton, _freshness);
+                _hoverButton, _freshness, UpdateNotice());
             BitBlt(hdc, 0, 0, client.Width, client.Height, surface.Hdc, 0, 0, SRCCOPY);
         }
 
@@ -319,7 +324,7 @@ internal sealed class Widget : IDisposable
 
         var surface = new DibSurface(width, height);
         Renderer.Draw(surface.Hdc, surface.Width, surface.Height, _statuses, _fonts, _scale,
-            Renderer.ButtonNone, _freshness);
+            Renderer.ButtonNone, _freshness, UpdateNotice());
         return surface;
     }
 
@@ -416,6 +421,8 @@ internal sealed class Widget : IDisposable
         return $"{(int)age.TotalHours}h ago";
     }
 
+    private string? UpdateNotice() => _updateTag is string tag ? $"{tag} available" : null;
+
     private static string AuthKey(AccountConfig account) => account.ConfigDir ?? string.Empty;
 
     private AuthStatus? CachedAuth(AccountConfig account) =>
@@ -444,10 +451,45 @@ internal sealed class Widget : IDisposable
         };
     }
 
+    /// <summary>
+    /// Piggybacks on the usage poll rather than owning a timer: the interval is a day, so the
+    /// worst this costs is one comparison every thirty seconds.
+    /// </summary>
+    private void MaybeCheckForUpdate()
+    {
+        if (!_config.CheckForUpdates) return;
+        if (_lastUpdateCheck is DateTime last && DateTime.Now - last < Updates.CheckInterval) return;
+        if (Interlocked.Exchange(ref _checkingForUpdate, 1) == 1) return;
+
+        _lastUpdateCheck = DateTime.Now;
+        var hwnd = _hwnd;
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                var tag = await Updates.LatestTagAsync(_shutdown.Token);
+
+                _updateTag = tag is not null && Updates.IsNewer(tag, Updates.CurrentVersion())
+                    ? tag
+                    : null;
+            }
+            finally
+            {
+                Interlocked.Exchange(ref _checkingForUpdate, 0);
+
+                if (!_shutdown.IsCancellationRequested)
+                    PostMessageW(hwnd, WM_APP_REFRESHED, IntPtr.Zero, IntPtr.Zero);
+            }
+        });
+    }
+
     private void OnRefreshed()
     {
         _lastRefreshAt = DateTime.Now;
         _freshness = "just now";
+
+        MaybeCheckForUpdate();
 
         ResizeToContent();
         InvalidateRect(_hwnd, IntPtr.Zero, false);
@@ -801,6 +843,12 @@ internal sealed class Widget : IDisposable
 
         try
         {
+            if (_updateTag is string tag)
+            {
+                AppendMenuW(menu, MF_STRING, new IntPtr(IdGetUpdate), $"Get {tag}");
+                AppendMenuW(menu, MF_SEPARATOR, IntPtr.Zero, null);
+            }
+
             if (!IsWindowVisible(_hwnd))
                 AppendMenuW(menu, MF_STRING, new IntPtr(IdShowPanel), "Show panel");
 
@@ -859,6 +907,10 @@ internal sealed class Widget : IDisposable
 
             case IdRefresh:
                 StartRefresh();
+                break;
+
+            case IdGetUpdate:
+                ShellExecuteW(IntPtr.Zero, "open", Updates.ReleasesPage, null, null, SW_SHOW);
                 break;
 
             case IdAutostart:

@@ -21,6 +21,12 @@ public sealed class AppConfig
     public bool AlwaysOnTop { get; set; } = true;
 
     /// <summary>
+    /// Whether to ask GitHub once a day whether a newer release exists. Off means the app makes
+    /// no network requests of its own at all.
+    /// </summary>
+    public bool CheckForUpdates { get; set; } = true;
+
+    /// <summary>
     /// Which limit the icon and taskbar bar report, matched against a row label — "session",
     /// "all models", a model name. Null shows everything the icon has room for.
     /// </summary>
@@ -155,6 +161,12 @@ public sealed class AuthStatus
     [JsonPropertyName("subscriptionType")] public string? SubscriptionType { get; set; }
 }
 
+/// <summary>The one field of the GitHub release payload this needs.</summary>
+public sealed class ReleaseInfo
+{
+    [JsonPropertyName("tag_name")] public string? TagName { get; set; }
+}
+
 /// <summary>Envelope of `claude -p ... --output-format json`. Only the fields we need.</summary>
 public sealed class CliResult
 {
@@ -170,4 +182,5 @@ public sealed class CliResult
 [JsonSerializable(typeof(AppConfig))]
 [JsonSerializable(typeof(AuthStatus))]
 [JsonSerializable(typeof(CliResult))]
+[JsonSerializable(typeof(ReleaseInfo))]
 internal partial class JsonContext : JsonSerializerContext;

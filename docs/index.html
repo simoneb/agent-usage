@@ -665,6 +665,14 @@ claude auth login</pre>
         </span>
       </li>
       <li>
+        <b>It does make one request of its own.</b>
+        <span>
+          Once a day it asks GitHub whether a newer release exists, and nothing about your
+          machine goes with it. Set <code>checkForUpdates</code> to <code>false</code> and it
+          makes no network requests at all.
+        </span>
+      </li>
+      <li>
         <b>It will not help you dodge a limit.</b>
         <span>
           Running the accounts you legitimately hold is ordinary use. Rotating between them to

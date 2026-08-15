@@ -171,7 +171,7 @@ internal static class Renderer
     public static void Draw(
         IntPtr hdc, int width, int height,
         IReadOnlyList<AccountStatus> statuses, FontSet fonts, double scale,
-        int hoverButton = ButtonNone, string? freshness = null)
+        int hoverButton = ButtonNone, string? freshness = null, string? update = null)
     {
         var full = new RECT { Left = 0, Top = 0, Right = width, Bottom = height };
         FillSolid(hdc, full, Background);
@@ -180,12 +180,22 @@ internal static class Renderer
         DrawTitleBarButtons(hdc, width, scale, hoverButton);
 
         // The title bar is otherwise empty on the left, so freshness costs no height.
+        var barTextWidth = width - S(16, scale) - S(ButtonWidth * 2, scale);
+
         if (freshness is not null)
         {
             SelectObject(hdc, fonts.Sub);
-            DrawLine(hdc, freshness, S(16, scale), 0,
-                width - S(16, scale) - S(ButtonWidth * 2, scale), S(TitleBarHeight, scale),
+            DrawLine(hdc, freshness, S(16, scale), 0, barTextWidth, S(TitleBarHeight, scale),
                 MutedColor, DT_LEFT | DT_VCENTER);
+        }
+
+        // Right-aligned in the same strip: a new release is worth seeing without opening a menu,
+        // but not worth a colour that means "a limit is nearly gone".
+        if (update is not null)
+        {
+            SelectObject(hdc, fonts.Sub);
+            DrawLine(hdc, update, S(16, scale), 0, barTextWidth, S(TitleBarHeight, scale),
+                Rgb(0xC9, 0x9A, 0x3E), DT_RIGHT | DT_VCENTER);
         }
 
         var padX = S(16, scale);

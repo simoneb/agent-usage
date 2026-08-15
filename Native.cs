@@ -491,4 +491,48 @@ internal static class Native
 
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
     public static extern IntPtr GetModuleHandleW(string? name);
+
+    // ---- winhttp ---------------------------------------------------------
+    //
+    // Used instead of HttpClient because the TLS stack lives in Windows here rather than in the
+    // binary: the managed one costs nearly 2 MB on a 2.4 MB app whose whole pitch is its size.
+
+    [DllImport("winhttp.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    public static extern IntPtr WinHttpOpen(
+        string? agent, uint accessType, string? proxy, string? proxyBypass, uint flags);
+
+    public const uint WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY = 4;
+
+    [DllImport("winhttp.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    public static extern IntPtr WinHttpConnect(IntPtr session, string serverName, ushort port, uint reserved);
+
+    public const ushort INTERNET_DEFAULT_HTTPS_PORT = 443;
+
+    [DllImport("winhttp.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    public static extern IntPtr WinHttpOpenRequest(
+        IntPtr connect, string verb, string objectName, string? version,
+        string? referrer, IntPtr acceptTypes, uint flags);
+
+    public const uint WINHTTP_FLAG_SECURE = 0x00800000;
+
+    [DllImport("winhttp.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    public static extern bool WinHttpSendRequest(
+        IntPtr request, string? headers, uint headersLength,
+        IntPtr optional, uint optionalLength, uint totalLength, IntPtr context);
+
+    [DllImport("winhttp.dll", SetLastError = true)]
+    public static extern bool WinHttpReceiveResponse(IntPtr request, IntPtr reserved);
+
+    [DllImport("winhttp.dll", SetLastError = true)]
+    public static extern bool WinHttpQueryDataAvailable(IntPtr request, out uint available);
+
+    [DllImport("winhttp.dll", SetLastError = true)]
+    public static extern bool WinHttpReadData(IntPtr request, byte[] buffer, uint toRead, out uint read);
+
+    [DllImport("winhttp.dll", SetLastError = true)]
+    public static extern bool WinHttpSetTimeouts(
+        IntPtr handle, int resolve, int connect, int send, int receive);
+
+    [DllImport("winhttp.dll", SetLastError = true)]
+    public static extern bool WinHttpCloseHandle(IntPtr handle);
 }
