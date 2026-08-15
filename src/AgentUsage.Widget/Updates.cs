@@ -101,6 +101,16 @@ public static class Updates
 
     private static Version Truncate(Version v) => new(v.Major, v.Minor, Math.Max(v.Build, 0));
 
+    /// <summary>
+    /// How the running build names itself at the top of the menu. Trimmed to major.minor.patch
+    /// so it reads as the same thing as the tag it came from — the version resource carries a
+    /// fourth component that is always 0 here, and "v0.8.0.0" beside "Update to v0.9.0" looks
+    /// like two different numbering schemes. A build that cannot say what it is says nothing
+    /// rather than guessing.
+    /// </summary>
+    public static string MenuTitle(Version? current) =>
+        current is null ? "Agent Usage" : $"Agent Usage v{Truncate(current)}";
+
     /// <summary>The newest published tag, or null if it could not be established.</summary>
     public static Task<string?> LatestTagAsync(CancellationToken ct) =>
         Task.Run(() => LatestRelease(ct)?.TagName is { Length: > 0 } tag ? tag : null, ct);

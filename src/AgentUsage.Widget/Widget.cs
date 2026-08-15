@@ -1066,11 +1066,16 @@ internal sealed class Widget : IDisposable
 
         try
         {
+            // What you are running, directly above what you could be running instead: the two
+            // are the same question, and the answer to "which version is this?" should not
+            // depend on an update happening to be available.
+            AppendMenuW(menu, MF_STRING | MF_GRAYED, IntPtr.Zero,
+                Updates.MenuTitle(Updates.CurrentVersion()));
+
             if (_updateState == UpdateInstalling)
             {
                 AppendMenuW(menu, MF_STRING | MF_GRAYED, new IntPtr(IdGetUpdate), "Updating…");
                 AppendMenuW(menu, MF_STRING, new IntPtr(IdReleaseNotes), "Release notes…");
-                AppendMenuW(menu, MF_SEPARATOR, IntPtr.Zero, null);
             }
             else if (_updateTag is string tag)
             {
@@ -1078,8 +1083,9 @@ internal sealed class Widget : IDisposable
                     _updateState == UpdateFailed ? $"Retry update to {tag}" : $"Update to {tag}");
 
                 AppendMenuW(menu, MF_STRING, new IntPtr(IdReleaseNotes), "Release notes…");
-                AppendMenuW(menu, MF_SEPARATOR, IntPtr.Zero, null);
             }
+
+            AppendMenuW(menu, MF_SEPARATOR, IntPtr.Zero, null);
 
             if (!IsWindowVisible(_hwnd))
                 AppendMenuW(menu, MF_STRING, new IntPtr(IdShowPanel), "Show panel");

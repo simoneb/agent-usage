@@ -56,6 +56,24 @@ public class UpdatesTests
     }
 
     [Theory]
+    [InlineData("0.8.0.0", "Agent Usage v0.8.0")]
+    [InlineData("1.2.3.4", "Agent Usage v1.2.3")]
+    [InlineData("0.8.0", "Agent Usage v0.8.0")]
+    public void NamesTheRunningBuildTheWayItsTagDoes(string current, string expected)
+    {
+        // The menu line sits directly above "Update to v0.9.0", so the two have to be
+        // comparable at a glance — a fourth component here reads as a different scheme.
+        Assert.Equal(expected, Updates.MenuTitle(Version.Parse(current)));
+    }
+
+    [Fact]
+    public void SaysNothingAboutAVersionItCannotRead()
+    {
+        // Same rule as the update check itself: no reading is better than a made-up one.
+        Assert.Equal("Agent Usage", Updates.MenuTitle(null));
+    }
+
+    [Theory]
     [InlineData(Architecture.X64, "AgentUsageWidget-win-x64.exe")]
     [InlineData(Architecture.Arm64, "AgentUsageWidget-win-arm64.exe")]
     public void DownloadsTheBuildThisMachineCanRun(Architecture arch, string expected)

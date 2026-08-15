@@ -248,8 +248,10 @@ config, and session history all live there. A fresh profile starts empty.
 - **Exit** lives in the tray icon's right-click menu, and in the panel's own right-click menu.
 - **Drag anywhere** else on the panel to move it. Position is saved.
 - **Double-click** to refresh immediately.
-- **Right-click** the panel or the tray icon for: show panel, refresh, **Icon shows ▸**,
-  always-on-top toggle, minimise, **Edit config…**, **Reload config**, exit.
+- **Right-click** the panel or the tray icon for: the running version, show panel, refresh, **Icon shows ▸**,
+  always-on-top toggle, minimise, **Edit config…**, **Reload config**, exit. The first line is
+  which build this is — `Agent Usage v0.9.0` — sitting directly above the update action when
+  there is one, so what you have and what is available read as one answer.
 - Colours: green below 75%, amber below 90%, red at or above 90%. The taskbar progress bar
   uses the matching normal/paused/error state.
 - The title bar shows how stale the reading is — `just now`, `12s ago`, `3m ago` — and, when a
