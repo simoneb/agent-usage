@@ -4,7 +4,7 @@
     <!-- The single source of truth for the version, shared by the widget and the CLI.
          The release workflow rewrites this line and nothing else — three copies to keep in step
          is three chances to ship a binary that misreports what it is. -->
-    <Version>0.6.0</Version>
+    <Version>0.7.0</Version>
   </PropertyGroup>
 
 </Project>
