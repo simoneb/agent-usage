@@ -267,8 +267,18 @@ public sealed class CodexRateLimits
     [JsonPropertyName("secondary")] public CodexWindow? Secondary { get; set; }
     [JsonPropertyName("plan_type")] public string? PlanType { get; set; }
 
-    // `credits` also appears here and is null on every sample seen so far. Left unmodelled
-    // deliberately: guessing at field names would produce a row that silently reads zero.
+    // Three more fields ride along here and are all deliberately unmodelled:
+    //
+    //   credits: { has_credits, unlimited, balance }
+    //   individual_limit
+    //   spend_control_reached
+    //
+    // Credits is the interesting one, and the reason it is not a row yet is direction. Every
+    // limit in this model counts what has been *used*; a credit balance counts what is *left*.
+    // Rendering one as the other inverts it — 5% of your credits remaining would draw as 5%
+    // used, in green. Every sample seen so far has balance: null on a plan with no credits, so
+    // there is nothing to confirm the units or the direction against, and a guess here fails in
+    // the worst possible way: quietly, and reassuringly.
 }
 
 public sealed class CodexWindow
