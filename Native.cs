@@ -22,6 +22,10 @@ internal static class Native
     public const uint WM_APP_REFRESHED = 0x8001;
     public const uint WM_APP_TRAY = 0x8002;
 
+    /// <summary>A refresh that arrived while one was running, posted back so it starts on the
+    /// UI thread rather than re-entering from the worker that just finished.</summary>
+    public const uint WM_APP_REFRESH_NOW = 0x8003;
+
     public const uint WM_MOUSEMOVE = 0x0200;
     public const uint WM_LBUTTONDOWN = 0x0201;
     public const uint WM_LBUTTONUP = 0x0202;
