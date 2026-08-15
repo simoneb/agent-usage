@@ -1,4 +1,6 @@
-# Claude Usage Widget
+# Agent Usage
+
+How much of your week is left, for Claude Code and Codex.
 
 A Windows desktop panel showing your AI coding subscription limits, for one or many accounts.
 It also owns a taskbar button that carries the headline number as its icon, a coloured progress
@@ -47,14 +49,14 @@ day the Copilot CLI can report its own usage.
 
 ## Download
 
-Grab a binary from [the latest release](https://github.com/simoneb/claude-usage-widget/releases/latest).
+Grab a binary from [the latest release](https://github.com/simoneb/agent-usage/releases/latest).
 
 **The widget**, Windows only:
 
 | | Run it directly | Zipped, with README and licence |
 |---|---|---|
-| **Intel / AMD** | `ClaudeUsageWidget-win-x64.exe` | `…-win-x64.zip` |
-| **Arm** | `ClaudeUsageWidget-win-arm64.exe` | `…-win-arm64.zip` |
+| **Intel / AMD** | `AgentUsageWidget-win-x64.exe` | `…-win-x64.zip` |
+| **Arm** | `AgentUsageWidget-win-arm64.exe` | `…-win-arm64.zip` |
 
 **The CLI**, everywhere: `agent-usage-osx-arm64`, `agent-usage-linux-x64`,
 `agent-usage-linux-arm64`, `agent-usage-win-x64.exe`. The `.tar.gz` of each carries the xbar and
@@ -163,7 +165,7 @@ First run writes the config, and where depends on the platform's own convention:
 
 | | |
 |---|---|
-| Windows | `%APPDATA%\ClaudeUsageWidget\config.json` |
+| Windows | `%APPDATA%\agent-usage\config.json` |
 | macOS | `~/Library/Application Support/agent-usage/config.json` |
 | Linux | `~/.config/agent-usage/config.json` (or `$XDG_CONFIG_HOME`) |
 
@@ -285,8 +287,8 @@ notification area and drag the badge out to pin it.
 # vswhere must be on PATH or the NativeAOT link step fails
 $env:PATH += ";${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer"
 
-dotnet publish .\ClaudeUsageWidget.csproj -c Release -o .\dist          # the widget
-dotnet publish .\src\AgentUsage.Cli -c Release -o .\dist-cli            # the CLI
+dotnet publish .\src\AgentUsage.Widget -c Release -o .\dist       # the widget
+dotnet publish .\src\AgentUsage.Cli    -c Release -o .\dist-cli   # the CLI
 ```
 
 NativeAOT cannot cross-compile between operating systems, so the macOS and Linux CLI binaries
@@ -299,7 +301,7 @@ Three projects:
 |---|---|
 | `src/AgentUsage.Core` | portable: config, providers, the limit model. `net10.0`. |
 | `src/AgentUsage.Cli` | the `agent-usage` binary. `net10.0`. |
-| `.` (root) | the widget: Win32, GDI, tray, taskbar, autostart. `net10.0-windows`. |
+| `src/AgentUsage.Widget` | the Windows widget: Win32, GDI, tray, taskbar, autostart. `net10.0-windows`. |
 
 Everything is NativeAOT, which rules out WinForms and WPF — the UI is raw Win32 and GDI.
 Anything added must stay AOT-safe: no reflection-based serialisation (add types to the
@@ -310,7 +312,7 @@ the rules that decide when a number is not fit to show:
 
 ```powershell
 dotnet test tests/AgentUsage.Tests          # portable — also runs on Linux and macOS in CI
-dotnet test tests/ClaudeUsageWidget.Tests   # Win32: autostart, update check
+dotnet test tests/AgentUsage.Widget.Tests   # Win32: autostart, update check
 ```
 
 The version lives once, in `Directory.Build.props`, and the release workflow rewrites that line.

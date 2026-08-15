@@ -4,7 +4,7 @@ The Windows widget is one way to see this data. `agent-usage` is the other: a si
 self-contained binary that prints the same readings, so whatever already draws a status bar on
 your machine can show them without any of the Win32 code existing.
 
-Get it from [the latest release](https://github.com/simoneb/claude-usage-widget/releases/latest) —
+Get it from [the latest release](https://github.com/simoneb/agent-usage/releases/latest) —
 `agent-usage-osx-arm64`, `agent-usage-linux-x64`, and so on — and put it on your `PATH`.
 
 ```console

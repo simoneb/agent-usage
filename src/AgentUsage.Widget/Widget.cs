@@ -3,9 +3,9 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using AgentUsage;
 using AgentUsage.Providers;
-using static ClaudeUsageWidget.Native;
+using static AgentUsage.Widget.Native;
 
-namespace ClaudeUsageWidget;
+namespace AgentUsage.Widget;
 
 /// <summary>
 /// The whole UI: a borderless always-on-top panel that also owns a taskbar button.
@@ -14,7 +14,7 @@ namespace ClaudeUsageWidget;
 /// </summary>
 internal sealed class Widget : IDisposable
 {
-    private const string ClassName = "ClaudeUsageWidgetWindow";
+    private const string ClassName = "AgentUsageWidgetWindow";
     private static Widget? _instance;
 
     private const int IdRefresh = 1;
@@ -101,7 +101,7 @@ internal sealed class Widget : IDisposable
 
         _hwnd = CreateWindowExW(
             WS_EX_APPWINDOW,
-            ClassName, "Claude Usage",
+            ClassName, "Agent Usage",
             WS_POPUP | WS_SYSMENU | WS_MINIMIZEBOX | WS_CLIPCHILDREN,
             0, 0, width, height,
             IntPtr.Zero, IntPtr.Zero, hInstance, IntPtr.Zero);
@@ -761,7 +761,7 @@ internal sealed class Widget : IDisposable
     private string TrayTip()
     {
         var statuses = _statuses;
-        if (statuses.Length == 0) return "Claude usage — loading…";
+        if (statuses.Length == 0) return "Agent usage — loading…";
 
         // Name the metric, since which one the icon reports is now a choice.
         var metric = _config.IconLimit is string fragment ? MenuLabel(fragment).ToLowerInvariant() : "week";

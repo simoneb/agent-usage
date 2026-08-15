@@ -1,6 +1,6 @@
 using Microsoft.Win32;
 
-namespace ClaudeUsageWidget;
+namespace AgentUsage.Widget;
 
 /// <summary>
 /// Starting with Windows, via the per-user Run key — the same mechanism Slack and Docker
@@ -10,7 +10,7 @@ namespace ClaudeUsageWidget;
 public static class Autostart
 {
     private const string RunKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
-    private const string ValueName = "ClaudeUsageWidget";
+    private const string ValueName = "AgentUsageWidget";
 
     /// <summary>The binary currently running, which is the one worth registering.</summary>
     public static string? ExePath => Environment.ProcessPath;

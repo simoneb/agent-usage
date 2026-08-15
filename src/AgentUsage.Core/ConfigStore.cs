@@ -8,10 +8,10 @@ public static class ConfigStore
     public const string PathVariable = "AGENT_USAGE_CONFIG";
 
     /// <summary>
-    /// %APPDATA%\ClaudeUsageWidget on Windows — unchanged from the first release, because a
-    /// widget that loses your account list on upgrade has broken a promise. Elsewhere the
-    /// framework maps ApplicationData onto XDG_CONFIG_HOME (~/.config), where a directory named
-    /// after a Windows-only widget would be nonsense, so the portable name is used instead.
+    /// One directory name on every platform, under whatever that platform calls its application
+    /// data: %APPDATA% on Windows, ~/Library/Application Support on macOS, XDG_CONFIG_HOME on
+    /// Linux. The widget and the CLI read the same file, so naming it after either of them would
+    /// be wrong on the other.
     /// </summary>
     public static string Directory
     {
@@ -23,8 +23,7 @@ public static class ConfigStore
 
             var root = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
 
-            return System.IO.Path.Combine(
-                root, OperatingSystem.IsWindows() ? "ClaudeUsageWidget" : "agent-usage");
+            return System.IO.Path.Combine(root, "agent-usage");
         }
     }
 

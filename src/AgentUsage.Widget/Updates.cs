@@ -2,9 +2,9 @@ using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using static ClaudeUsageWidget.Native;
+using static AgentUsage.Widget.Native;
 
-namespace ClaudeUsageWidget;
+namespace AgentUsage.Widget;
 
 /// <summary>The one field of the GitHub release payload this needs.</summary>
 public sealed class ReleaseInfo
@@ -27,10 +27,10 @@ internal partial class WidgetJson : JsonSerializerContext;
 public static class Updates
 {
     private const string ApiHost = "api.github.com";
-    private const string ApiPath = "/repos/simoneb/claude-usage-widget/releases/latest";
+    private const string ApiPath = "/repos/simoneb/agent-usage/releases/latest";
 
     public const string ReleasesPage =
-        "https://github.com/simoneb/claude-usage-widget/releases/latest";
+        "https://github.com/simoneb/agent-usage/releases/latest";
 
     public static readonly TimeSpan CheckInterval = TimeSpan.FromDays(1);
 
@@ -96,9 +96,15 @@ public static class Updates
         }
     }
 
+    /// <remarks>
+    /// Redirects are followed without asking: WinHTTP's default policy allows them for
+    /// same-scheme hops. That is what carried this over the rename from claude-usage-widget —
+    /// GitHub answers the old path with a 301, and binaries built before the rename follow it
+    /// and keep seeing releases.
+    /// </remarks>
     private static string? Get(string host, string path, CancellationToken ct)
     {
-        var agent = $"ClaudeUsageWidget/{CurrentVersion()?.ToString() ?? "0"}";
+        var agent = $"AgentUsageWidget/{CurrentVersion()?.ToString() ?? "0"}";
 
         var session = WinHttpOpen(agent, WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY, null, null, 0);
         if (session == IntPtr.Zero) return null;

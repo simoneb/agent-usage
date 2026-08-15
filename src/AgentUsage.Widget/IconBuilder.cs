@@ -1,7 +1,7 @@
 using AgentUsage;
-using static ClaudeUsageWidget.Native;
+using static AgentUsage.Widget.Native;
 
-namespace ClaudeUsageWidget;
+namespace AgentUsage.Widget;
 
 /// <summary>
 /// Builds the app icon.

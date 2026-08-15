@@ -1,7 +1,7 @@
-using ClaudeUsageWidget;
+using AgentUsage.Widget;
 using Xunit;
 
-namespace ClaudeUsageWidget.Tests;
+namespace AgentUsage.Widget.Tests;
 
 /// <summary>
 /// The registry side is a few lines around a well-known key; the part that can silently be
@@ -9,7 +9,7 @@ namespace ClaudeUsageWidget.Tests;
 /// </summary>
 public class AutostartTests
 {
-    private const string Exe = @"C:\Users\you\AppData\Local\Programs\ClaudeUsageWidget\ClaudeUsageWidget.exe";
+    private const string Exe = @"C:\Users\you\AppData\Local\Programs\AgentUsageWidget\AgentUsageWidget.exe";
 
     [Fact]
     public void QuotesThePathSoTheShellDoesNotSplitItOnASpace()
@@ -44,7 +44,7 @@ public class AutostartTests
     {
         // Reporting "on" here would put a checkmark on a path that starts nothing. Off means
         // clicking the item repairs the entry instead.
-        Assert.False(Autostart.SamePath(@"""D:\dev\claude-usage-widget\dist\ClaudeUsageWidget.exe""", Exe));
+        Assert.False(Autostart.SamePath(@"""D:\dev\agent-usage\dist\AgentUsageWidget.exe""", Exe));
     }
 
     [Fact]

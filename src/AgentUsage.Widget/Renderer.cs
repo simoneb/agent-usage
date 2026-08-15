@@ -1,8 +1,8 @@
 using AgentUsage;
 using AgentUsage.Providers;
-using static ClaudeUsageWidget.Native;
+using static AgentUsage.Widget.Native;
 
-namespace ClaudeUsageWidget;
+namespace AgentUsage.Widget;
 
 /// <summary>An off-screen 32bpp DIB plus its memory DC. Used for the panel and the taskbar bitmaps.</summary>
 internal sealed unsafe class DibSurface : IDisposable

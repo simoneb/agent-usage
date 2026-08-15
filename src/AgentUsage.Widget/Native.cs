@@ -1,6 +1,6 @@
 using System.Runtime.InteropServices;
 
-namespace ClaudeUsageWidget;
+namespace AgentUsage.Widget;
 
 internal static class Native
 {

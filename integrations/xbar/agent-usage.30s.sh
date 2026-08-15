@@ -6,7 +6,7 @@
 # <xbar.author.github>simoneb</xbar.author.github>
 # <xbar.desc>Claude Code and Codex subscription limits in the macOS menu bar.</xbar.desc>
 # <xbar.dependencies>agent-usage</xbar.dependencies>
-# <xbar.abouturl>https://github.com/simoneb/claude-usage-widget</xbar.abouturl>
+# <xbar.abouturl>https://github.com/simoneb/agent-usage</xbar.abouturl>
 #
 # Install: copy into your xbar (or SwiftBar) plugin folder, keeping the ".30s." in the name —
 # that is how both apps decide the refresh interval. Then `chmod +x` it.
@@ -20,7 +20,7 @@ if ! command -v agent-usage >/dev/null 2>&1; then
   echo "⚠️ agent-usage"
   echo "---"
   echo "agent-usage is not on PATH"
-  echo "Download it | href=https://github.com/simoneb/claude-usage-widget/releases/latest"
+  echo "Download it | href=https://github.com/simoneb/agent-usage/releases/latest"
   exit 0
 fi
 

@@ -17,7 +17,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\ClaudeUsageWidget.csproj" />
+    <ProjectReference Include="..\..\src\AgentUsage.Widget\AgentUsage.Widget.csproj" />
   </ItemGroup>
 
 </Project>

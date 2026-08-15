@@ -1,7 +1,7 @@
-using ClaudeUsageWidget;
+using AgentUsage.Widget;
 using Xunit;
 
-namespace ClaudeUsageWidget.Tests;
+namespace AgentUsage.Widget.Tests;
 
 /// <summary>
 /// The comparison is the whole feature: announcing an update that is not one, or staying quiet

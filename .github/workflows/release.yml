@@ -40,7 +40,7 @@ jobs:
         with:
           dotnet-version: '10.0.x'
       - run: dotnet test tests/AgentUsage.Tests -c Release
-      - run: dotnet test tests/ClaudeUsageWidget.Tests -c Release
+      - run: dotnet test tests/AgentUsage.Widget.Tests -c Release
 
   # Settles what version is being released, and on the manual path brings the repository to
   # it. Both paths end with a tag that exists and a csproj that agrees with it.
@@ -128,7 +128,7 @@ jobs:
           run("git", "config", "user.email",
               "41898282+github-actions[bot]@users.noreply.github.com")
           run("git", "commit", "-am", f"Release {version} [skip ci]")
-          run("git", "tag", "-a", tag, "-m", f"claude-usage-widget {version}")
+          run("git", "tag", "-a", tag, "-m", f"agent-usage {version}")
           run("git", "push", "--follow-tags")
 
           emit(tag=tag, version=version)
@@ -150,7 +150,7 @@ jobs:
           dotnet-version: '10.0.x'
       - name: Put vswhere on PATH
         run: echo "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer" >> $env:GITHUB_PATH
-      - run: dotnet publish ClaudeUsageWidget.csproj -c Release -r ${{ matrix.rid }} -o publish
+      - run: dotnet publish src/AgentUsage.Widget -c Release -r ${{ matrix.rid }} -o publish
 
       # Two shapes of the same binary. The bare .exe is what most people want; the zip exists
       # because browsers and corporate filters block a downloaded .exe far more often than a
@@ -161,11 +161,11 @@ jobs:
           VERSION: ${{ needs.prepare.outputs.version }}
         run: |
           New-Item -ItemType Directory assets | Out-Null
-          Copy-Item publish\ClaudeUsageWidget.exe "assets\ClaudeUsageWidget-$env:RID.exe"
+          Copy-Item publish\AgentUsageWidget.exe "assets\AgentUsageWidget-$env:RID.exe"
 
           New-Item -ItemType Directory staging | Out-Null
-          Copy-Item publish\ClaudeUsageWidget.exe, README.md, LICENSE staging\
-          Compress-Archive staging\* "assets\ClaudeUsageWidget-$env:VERSION-$env:RID.zip"
+          Copy-Item publish\AgentUsageWidget.exe, README.md, LICENSE staging\
+          Compress-Archive staging\* "assets\AgentUsageWidget-$env:VERSION-$env:RID.zip"
 
       - uses: actions/upload-artifact@v7
         with:
@@ -292,8 +292,8 @@ jobs:
             echo
             echo "| | Run it directly | Zipped, with README and licence |"
             echo "|---|---|---|"
-            echo "| **Intel / AMD** | \`ClaudeUsageWidget-win-x64.exe\` | \`…-win-x64.zip\` |"
-            echo "| **Arm** | \`ClaudeUsageWidget-win-arm64.exe\` | \`…-win-arm64.zip\` |"
+            echo "| **Intel / AMD** | \`AgentUsageWidget-win-x64.exe\` | \`…-win-x64.zip\` |"
+            echo "| **Arm** | \`AgentUsageWidget-win-arm64.exe\` | \`…-win-arm64.zip\` |"
             echo
             echo "## The CLI (macOS, Linux, Windows)"
             echo
@@ -313,7 +313,7 @@ jobs:
             echo "Checksums are in \`SHA256SUMS.txt\`:"
             echo
             echo '```powershell'
-            echo '(Get-FileHash .\ClaudeUsageWidget-win-x64.exe -Algorithm SHA256).Hash.ToLower()'
+            echo '(Get-FileHash .\AgentUsageWidget-win-x64.exe -Algorithm SHA256).Hash.ToLower()'
             echo '```'
             echo
             echo '```bash'

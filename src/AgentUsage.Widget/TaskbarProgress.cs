@@ -1,6 +1,6 @@
 using System.Runtime.InteropServices;
 
-namespace ClaudeUsageWidget;
+namespace AgentUsage.Widget;
 
 /// <summary>
 /// Drives the progress bar on this app's taskbar button via ITaskbarList3.

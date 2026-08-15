@@ -48,7 +48,7 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
-      - run: dotnet test tests/ClaudeUsageWidget.Tests -c Release
+      - run: dotnet test tests/AgentUsage.Widget.Tests -c Release
 
   build-widget:
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository
@@ -73,11 +73,11 @@ jobs:
 
       # Publish, not build: AOT compilation only happens on publish, and a link failure is
       # exactly the kind of break that would otherwise reach a release.
-      - run: dotnet publish ClaudeUsageWidget.csproj -c Release -r ${{ matrix.rid }} -o dist
+      - run: dotnet publish src/AgentUsage.Widget -c Release -r ${{ matrix.rid }} -o dist
 
       - name: Report the binary size
         run: |
-          $exe = Get-Item dist\ClaudeUsageWidget.exe
+          $exe = Get-Item dist\AgentUsageWidget.exe
           $mb = [math]::Round($exe.Length / 1MB, 2)
           echo "${{ matrix.rid }}: $mb MB" >> $env:GITHUB_STEP_SUMMARY
           # Size is the whole reason this is NativeAOT rather than WinForms. A regression
@@ -86,8 +86,8 @@ jobs:
 
       - uses: actions/upload-artifact@v7
         with:
-          name: ClaudeUsageWidget-${{ matrix.rid }}
-          path: dist/ClaudeUsageWidget.exe
+          name: AgentUsageWidget-${{ matrix.rid }}
+          path: dist/AgentUsageWidget.exe
 
   # NativeAOT cannot cross-compile between operating systems, so each target builds on its own
   # runner. That constraint is also the feature: every one of these binaries is built and then
