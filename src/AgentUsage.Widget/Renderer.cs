@@ -119,6 +119,31 @@ internal static class Renderer
         return ButtonNone;
     }
 
+    /// <summary>
+    /// Where the update notice sits, given the text it will hold. Both the drawing and the hit
+    /// test go through here: a link whose clickable area is worked out separately from where it
+    /// was painted is a link that stops working the first time either side is edited.
+    ///
+    /// The caller has already selected the font the notice is drawn in.
+    /// </summary>
+    public static RECT NoticeRect(IntPtr hdc, string text, int width, double scale)
+    {
+        GetTextExtentPoint32W(hdc, text, text.Length, out var size);
+
+        // Right-aligned against the title-bar buttons, with a couple of pixels of slack so the
+        // hit target is not exactly the glyphs.
+        var right = width - S(ButtonWidth * 2, scale);
+        var pad = S(4, scale);
+
+        return new RECT
+        {
+            Left = Math.Max(S(8, scale), right - size.Width - pad),
+            Top = 0,
+            Right = right,
+            Bottom = S(TitleBarHeight, scale),
+        };
+    }
+
     private static readonly uint Background = Rgb(0x17, 0x17, 0x1A);
     private static readonly uint TitleColor = Rgb(0xEC, 0xEC, 0xEE);
     private static readonly uint SubColor = Rgb(0x86, 0x86, 0x90);
@@ -173,7 +198,8 @@ internal static class Renderer
     public static void Draw(
         IntPtr hdc, int width, int height,
         IReadOnlyList<AccountStatus> statuses, FontSet fonts, double scale,
-        int hoverButton = ButtonNone, string? freshness = null, string? update = null)
+        int hoverButton = ButtonNone, string? freshness = null, string? update = null,
+        bool updateHovered = false)
     {
         var full = new RECT { Left = 0, Top = 0, Right = width, Bottom = height };
         FillSolid(hdc, full, Background);
@@ -192,12 +218,33 @@ internal static class Renderer
         }
 
         // Right-aligned in the same strip: a new release is worth seeing without opening a menu,
-        // but not worth a colour that means "a limit is nearly gone".
+        // but not worth a colour that means "a limit is nearly gone". It is also the button that
+        // installs it, so hovering brightens it and underlines it the way a link does.
         if (update is not null)
         {
             SelectObject(hdc, fonts.Sub);
-            DrawLine(hdc, update, S(16, scale), 0, barTextWidth, S(TitleBarHeight, scale),
-                Rgb(0xC9, 0x9A, 0x3E), DT_RIGHT | DT_VCENTER);
+
+            var colour = updateHovered ? Rgb(0xF0, 0xC1, 0x5E) : Rgb(0xC9, 0x9A, 0x3E);
+            var rect = NoticeRect(hdc, update, width, scale);
+
+            DrawLine(hdc, update, rect.Left, rect.Top, rect.Width, rect.Height,
+                colour, DT_RIGHT | DT_VCENTER);
+
+            if (updateHovered)
+            {
+                GetTextExtentPoint32W(hdc, update, update.Length, out var size);
+
+                var baseline = (rect.Height + size.Height) / 2;
+                var rule = new RECT
+                {
+                    Left = rect.Right - size.Width,
+                    Top = baseline,
+                    Right = rect.Right,
+                    Bottom = baseline + Math.Max(1, S(1, scale)),
+                };
+
+                FillSolid(hdc, rule, colour);
+            }
         }
 
         var padX = S(16, scale);

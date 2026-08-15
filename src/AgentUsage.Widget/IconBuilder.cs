@@ -151,27 +151,20 @@ internal static class IconBuilder
     {
         Fill(hdc, 0, 0, size, size, Slab);
 
-        var pad = Math.Max(1, size / 16);
-        var groupGap = Math.Max(2, size / 8);
+        var gap = Math.Max(2, size / 8);
+        var heights = SplitRows(size, readings.Count * 2, gap, readings.Count - 1);
 
-        var rows = readings.Count * 2;
-        var barHeight = Math.Max(1,
-            (size - pad * 2 - groupGap * (readings.Count - 1)) / rows);
-
-        var blockHeight = barHeight * rows + groupGap * (readings.Count - 1);
-        var top = (size - blockHeight) / 2;
-
-        var left = pad;
-        var right = size - pad;
+        var y = 0;
 
         for (var i = 0; i < readings.Count; i++)
         {
-            var y = top + i * (barHeight * 2 + groupGap);
-
             // No session row means the CLI did not report one; leave its track empty rather
             // than borrowing the weekly number and implying a reading that does not exist.
-            DrawBar(hdc, left, y, right, y + barHeight, readings[i].Session);
-            DrawBar(hdc, left, y + barHeight, right, y + barHeight * 2, readings[i].Week);
+            DrawBar(hdc, 0, y, size, y + heights[i * 2], readings[i].Session);
+            y += heights[i * 2];
+
+            DrawBar(hdc, 0, y, size, y + heights[i * 2 + 1], readings[i].Week);
+            y += heights[i * 2 + 1] + (i < readings.Count - 1 ? gap : 0);
         }
     }
 
@@ -180,20 +173,34 @@ internal static class IconBuilder
     {
         Fill(hdc, 0, 0, size, size, Slab);
 
-        var pad = Math.Max(1, size / 8);
         var gap = Math.Max(1, size / 16);
+        var heights = SplitRows(size, readings.Count, gap, readings.Count - 1);
 
-        // Whatever is left over after padding and gaps, split evenly. Integer division can
-        // leave a row or two unused; centring the block hides that.
-        var barHeight = Math.Max(1, (size - pad * 2 - gap * (readings.Count - 1)) / readings.Count);
-        var blockHeight = barHeight * readings.Count + gap * (readings.Count - 1);
-        var top = (size - blockHeight) / 2;
+        var y = 0;
 
         for (var i = 0; i < readings.Count; i++)
         {
-            var y = top + i * (barHeight + gap);
-            DrawBar(hdc, pad, y, size - pad, y + barHeight, readings[i].Week);
+            DrawBar(hdc, 0, y, size, y + heights[i], readings[i].Week);
+            y += heights[i] + gap;
         }
+    }
+
+    /// <summary>
+    /// Row heights that add up to exactly the space available, remainder spread over the top
+    /// rows a pixel at a time. At tray sizes the whole icon is sixteen pixels tall, so rounding
+    /// every row down the same way — the obvious thing — throws away up to three of them and the
+    /// icon renders visibly shorter than the ones either side of it.
+    /// </summary>
+    internal static int[] SplitRows(int size, int rows, int gap, int gaps)
+    {
+        var ink = Math.Max(rows, size - gap * gaps);
+        var height = ink / rows;
+        var spare = ink - height * rows;
+
+        var heights = new int[rows];
+        for (var i = 0; i < rows; i++) heights[i] = height + (i < spare ? 1 : 0);
+
+        return heights;
     }
 
     private static void DrawBar(IntPtr hdc, int left, int top, int right, int bottom, int? pct)

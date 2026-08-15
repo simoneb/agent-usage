@@ -26,6 +26,14 @@ internal sealed class Widget : IDisposable
     private const int IdShowPanel = 7;
     private const int IdAutostart = 8;
     private const int IdGetUpdate = 9;
+    private const int IdReleaseNotes = 10;
+
+    // What the update notice in the title bar is currently saying, which is also what clicking
+    // it does: install the release, or — once an attempt has failed — hand over to the browser.
+    private const int UpdateNone = 0;
+    private const int UpdateAvailable = 1;
+    private const int UpdateInstalling = 2;
+    private const int UpdateFailed = 3;
 
     // The limit chooser is built from whatever rows the CLI reported, so its ids are assigned
     // at menu-build time from this base.
@@ -55,6 +63,10 @@ internal sealed class Widget : IDisposable
     private DateTime? _lastUpdateCheck;
     private volatile string? _updateTag;
     private int _checkingForUpdate;
+    private int _updateState = UpdateNone;
+    private int _installing;
+    private RECT _noticeRect;
+    private bool _noticeHovered;
 
     private int _hoverButton = Renderer.ButtonNone;
     private bool _mouseTracking;
@@ -78,6 +90,10 @@ internal sealed class Widget : IDisposable
     {
         SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
         CoInitializeEx(IntPtr.Zero, COINIT_APARTMENTTHREADED);
+
+        // Whatever the previous version renamed aside on its way out. It could not delete itself
+        // while it was the process running.
+        Updates.CleanLeftovers();
 
         var hInstance = GetModuleHandleW(null);
         var classNamePtr = Marshal.StringToHGlobalUni(ClassName);
@@ -185,19 +201,35 @@ internal sealed class Widget : IDisposable
 
                 return new IntPtr(
                     Renderer.HitTestButton(pt.X, pt.Y, client.Width, _scale) != Renderer.ButtonNone
+                    || InNotice(pt.X, pt.Y)
                         ? HTCLIENT
                         : HTCAPTION);
             }
 
+            case WM_SETCURSOR:
+            {
+                // Only the client area gets a say; the rest is the caption, and Windows knows
+                // what cursor a caption wants.
+                if ((lParam.ToInt64() & 0xFFFF) != HTCLIENT) break;
+
+                GetCursorPos(out var pt);
+                ScreenToClient(hwnd, ref pt);
+
+                if (!InNotice(pt.X, pt.Y)) break;
+
+                SetCursor(LoadCursorW(IntPtr.Zero, IDC_HAND));
+                return new IntPtr(1);
+            }
+
             case WM_MOUSEMOVE:
             {
-                GetClientRect(hwnd, out var client);
-                var hit = Renderer.HitTestButton(
-                    (short)(lParam.ToInt64() & 0xFFFF),
-                    (short)((lParam.ToInt64() >> 16) & 0xFFFF),
-                    client.Width, _scale);
+                var x = (short)(lParam.ToInt64() & 0xFFFF);
+                var y = (short)((lParam.ToInt64() >> 16) & 0xFFFF);
 
-                SetHover(hwnd, hit);
+                GetClientRect(hwnd, out var client);
+
+                SetHover(hwnd, Renderer.HitTestButton(x, y, client.Width, _scale));
+                SetNoticeHover(hwnd, InNotice(x, y));
                 EnsureMouseTracking(hwnd);
                 return IntPtr.Zero;
             }
@@ -205,18 +237,20 @@ internal sealed class Widget : IDisposable
             case WM_MOUSELEAVE:
                 _mouseTracking = false;
                 SetHover(hwnd, Renderer.ButtonNone);
+                SetNoticeHover(hwnd, false);
                 return IntPtr.Zero;
 
             case WM_LBUTTONUP:
             {
+                var x = (short)(lParam.ToInt64() & 0xFFFF);
+                var y = (short)((lParam.ToInt64() >> 16) & 0xFFFF);
+
                 GetClientRect(hwnd, out var client);
-                var hit = Renderer.HitTestButton(
-                    (short)(lParam.ToInt64() & 0xFFFF),
-                    (short)((lParam.ToInt64() >> 16) & 0xFFFF),
-                    client.Width, _scale);
+                var hit = Renderer.HitTestButton(x, y, client.Width, _scale);
 
                 if (hit == Renderer.ButtonMinimize) ShowWindow(hwnd, SW_MINIMIZE);
                 else if (hit == Renderer.ButtonClose) HidePanel();
+                else if (InNotice(x, y)) StartUpdate();
 
                 return IntPtr.Zero;
             }
@@ -258,6 +292,10 @@ internal sealed class Widget : IDisposable
 
             case WM_APP_REFRESH_NOW:
                 StartRefresh();
+                return IntPtr.Zero;
+
+            case WM_APP_UPDATE_DONE:
+                OnUpdateFinished((InstallResult)(int)wParam.ToInt64());
                 return IntPtr.Zero;
 
             case WM_EXITSIZEMOVE:
@@ -312,10 +350,21 @@ internal sealed class Widget : IDisposable
         var hdc = BeginPaint(hwnd, out var ps);
         GetClientRect(hwnd, out var client);
 
+        var notice = UpdateNotice();
+
         using (var surface = new DibSurface(client.Width, client.Height))
         {
             Renderer.Draw(surface.Hdc, surface.Width, surface.Height, _statuses, _fonts, _scale,
-                _hoverButton, _freshness, UpdateNotice());
+                _hoverButton, _freshness, notice, _noticeHovered);
+
+            // Measured off the same surface that just drew it. The panel repaints whenever the
+            // notice appears, changes or resizes, so by the time a mouse message arrives this
+            // rectangle describes what is actually on screen.
+            SelectObject(surface.Hdc, _fonts.Sub);
+            _noticeRect = notice is null
+                ? default
+                : Renderer.NoticeRect(surface.Hdc, notice, surface.Width, _scale);
+
             BitBlt(hdc, 0, 0, client.Width, client.Height, surface.Hdc, 0, 0, SRCCOPY);
         }
 
@@ -444,7 +493,26 @@ internal sealed class Widget : IDisposable
         return $"{(int)age.TotalHours}h ago";
     }
 
-    private string? UpdateNotice() => _updateTag is string tag ? $"{tag} available" : null;
+    /// <summary>
+    /// The title bar's right-hand strip. Phrased as the action it performs rather than as an
+    /// observation, because clicking it is what installs the release.
+    /// </summary>
+    private string? UpdateNotice() => _updateState switch
+    {
+        UpdateInstalling => "updating…",
+        UpdateFailed => "update failed",
+        UpdateAvailable when _updateTag is string tag => $"update to {tag}",
+        _ => null,
+    };
+
+    /// <summary>Whether clicking the notice would do anything.</summary>
+    private bool NoticeIsClickable() =>
+        _updateState is UpdateAvailable or UpdateFailed;
+
+    private bool InNotice(int x, int y) =>
+        NoticeIsClickable() &&
+        x >= _noticeRect.Left && x < _noticeRect.Right &&
+        y >= _noticeRect.Top && y < _noticeRect.Bottom;
 
     // Keyed by provider as well as directory: two accounts can legitimately share a config dir
     // of null while being different tools entirely.
@@ -499,6 +567,11 @@ internal sealed class Widget : IDisposable
                 _updateTag = tag is not null && Updates.IsNewer(tag, Updates.CurrentVersion())
                     ? tag
                     : null;
+
+                // An attempt that failed earlier keeps saying so; a check that finds nothing new
+                // clears the notice entirely.
+                if (_updateState != UpdateInstalling && _updateState != UpdateFailed)
+                    _updateState = _updateTag is null ? UpdateNone : UpdateAvailable;
             }
             finally
             {
@@ -510,12 +583,101 @@ internal sealed class Widget : IDisposable
         });
     }
 
+    /// <summary>
+    /// Downloads the newest release, verifies it against the checksum published beside it, puts
+    /// it in place of this binary and restarts into it. Started by clicking the notice, by the
+    /// tray menu, or on its own when the config asks for it.
+    /// </summary>
+    private void StartUpdate()
+    {
+        // A failed attempt has already said everything it can from inside the app. The browser
+        // is the honest fallback: whatever went wrong, the release page still works.
+        if (_updateState == UpdateFailed)
+        {
+            ShellExecuteW(IntPtr.Zero, "open", Updates.ReleasesPage, null, null, SW_SHOW);
+            return;
+        }
+
+        if (_updateState != UpdateAvailable) return;
+        if (Interlocked.Exchange(ref _installing, 1) == 1) return;
+
+        _updateState = UpdateInstalling;
+        SetNoticeHover(_hwnd, false);
+        InvalidateRect(_hwnd, IntPtr.Zero, false);
+        DwmInvalidateIconicBitmaps(_hwnd);
+
+        var hwnd = _hwnd;
+
+        _ = Task.Run(async () =>
+        {
+            var result = InstallResult.DownloadFailed;
+
+            try
+            {
+                result = await Updates.InstallLatestAsync(_shutdown.Token);
+            }
+            finally
+            {
+                Interlocked.Exchange(ref _installing, 0);
+
+                if (!_shutdown.IsCancellationRequested)
+                    PostMessageW(hwnd, WM_APP_UPDATE_DONE, new IntPtr((int)result), IntPtr.Zero);
+            }
+        });
+    }
+
+    private void OnUpdateFinished(InstallResult result)
+    {
+        switch (result)
+        {
+            case InstallResult.Installed:
+                RestartIntoNewVersion();
+                return;
+
+            // The check said there was something newer and the release says otherwise: nothing
+            // is wrong, there is just nothing to do.
+            case InstallResult.AlreadyCurrent:
+                _updateTag = null;
+                _updateState = UpdateNone;
+                break;
+
+            default:
+                _updateState = UpdateFailed;
+                break;
+        }
+
+        InvalidateRect(_hwnd, IntPtr.Zero, false);
+        DwmInvalidateIconicBitmaps(_hwnd);
+    }
+
+    /// <summary>
+    /// The binary at this path is now the new one. Leave the tray before starting it, so there
+    /// is never a moment with two icons, and quit as soon as it is on its way.
+    /// </summary>
+    private void RestartIntoNewVersion()
+    {
+        var exe = Environment.ProcessPath;
+        if (exe is null) return;
+
+        _shutdown.Cancel();
+        _taskbar?.SetState(_hwnd, TaskbarProgress.State.NoProgress);
+        RemoveTray();
+        ShowWindow(_hwnd, SW_HIDE);
+
+        ShellExecuteW(IntPtr.Zero, "open", exe, null, Path.GetDirectoryName(exe), SW_SHOW);
+        PostQuitMessage(0);
+    }
+
     private void OnRefreshed()
     {
         _lastRefreshAt = DateTime.Now;
         _freshness = "just now";
 
         MaybeCheckForUpdate();
+
+        // Off by default: an app that replaces itself and restarts while you are reading it is
+        // a surprise, and the notice is one click either way.
+        if (_config.AutoUpdate && _updateState == UpdateAvailable) StartUpdate();
 
         ResizeToContent();
         InvalidateRect(_hwnd, IntPtr.Zero, false);
@@ -656,12 +818,38 @@ internal sealed class Widget : IDisposable
         return (x, y);
     }
 
+    /// <summary>
+    /// The DPI of the monitor the taskbar is on, which is the one the tray icon is drawn at.
+    /// Not necessarily the panel's: a laptop screen at 150% beside an external one at 100% has
+    /// the tray on whichever of the two holds the taskbar.
+    /// </summary>
+    private uint TrayDpi()
+    {
+        var tray = FindWindowW("Shell_TrayWnd", null);
+        var dpi = tray != IntPtr.Zero ? GetDpiForWindow(tray) : 0;
+
+        if (dpi == 0) dpi = GetDpiForWindow(_hwnd);
+
+        return dpi == 0 ? 96 : dpi;
+    }
+
+    private static int Metric(int index, uint dpi, int fallback)
+    {
+        var value = GetSystemMetricsForDpi(index, dpi);
+        return value > 0 ? value : fallback;
+    }
+
     private void UpdateIcon()
     {
         var statuses = _statuses;
 
-        var small = IconBuilder.Build(statuses, 16, _config.IconLimit);
-        var big = IconBuilder.Build(statuses, 32, _config.IconLimit);
+        // Built at the size the shell is going to draw, rather than a fixed 16: on a display at
+        // 150% the tray's box is 24 pixels, and a 16-pixel icon dropped into it is both blurry
+        // and visibly smaller than everything beside it.
+        var dpi = TrayDpi();
+
+        var small = IconBuilder.Build(statuses, Metric(SM_CXSMICON, dpi, 16), _config.IconLimit);
+        var big = IconBuilder.Build(statuses, Metric(SM_CXICON, dpi, 32), _config.IconLimit);
 
         SendMessageW(_hwnd, WM_SETICON, new IntPtr(ICON_SMALL), small);
         SendMessageW(_hwnd, WM_SETICON, new IntPtr(ICON_BIG), big);
@@ -705,6 +893,14 @@ internal sealed class Widget : IDisposable
         InvalidateRect(hwnd, IntPtr.Zero, false);
     }
 
+    private void SetNoticeHover(IntPtr hwnd, bool hovered)
+    {
+        if (_noticeHovered == hovered) return;
+
+        _noticeHovered = hovered;
+        InvalidateRect(hwnd, IntPtr.Zero, false);
+    }
+
     /// <summary>Without this the widget never learns the pointer left a button.</summary>
     private void EnsureMouseTracking(IntPtr hwnd)
     {
@@ -724,6 +920,7 @@ internal sealed class Widget : IDisposable
     {
         ShowWindow(_hwnd, SW_HIDE);
         SetHover(_hwnd, Renderer.ButtonNone);
+        SetNoticeHover(_hwnd, false);
     }
 
     private void ShowPanel()
@@ -869,9 +1066,18 @@ internal sealed class Widget : IDisposable
 
         try
         {
-            if (_updateTag is string tag)
+            if (_updateState == UpdateInstalling)
             {
-                AppendMenuW(menu, MF_STRING, new IntPtr(IdGetUpdate), $"Get {tag}");
+                AppendMenuW(menu, MF_STRING | MF_GRAYED, new IntPtr(IdGetUpdate), "Updating…");
+                AppendMenuW(menu, MF_STRING, new IntPtr(IdReleaseNotes), "Release notes…");
+                AppendMenuW(menu, MF_SEPARATOR, IntPtr.Zero, null);
+            }
+            else if (_updateTag is string tag)
+            {
+                AppendMenuW(menu, MF_STRING, new IntPtr(IdGetUpdate),
+                    _updateState == UpdateFailed ? $"Retry update to {tag}" : $"Update to {tag}");
+
+                AppendMenuW(menu, MF_STRING, new IntPtr(IdReleaseNotes), "Release notes…");
                 AppendMenuW(menu, MF_SEPARATOR, IntPtr.Zero, null);
             }
 
@@ -936,6 +1142,13 @@ internal sealed class Widget : IDisposable
                 break;
 
             case IdGetUpdate:
+                // A retry after a failure starts a real attempt rather than opening the browser,
+                // which is what clicking the notice in that state would do.
+                if (_updateState == UpdateFailed) _updateState = UpdateAvailable;
+                StartUpdate();
+                break;
+
+            case IdReleaseNotes:
                 ShellExecuteW(IntPtr.Zero, "open", Updates.ReleasesPage, null, null, SW_SHOW);
                 break;
 

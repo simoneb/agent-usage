@@ -177,6 +177,7 @@ First run writes the config, and where depends on the platform's own convention:
   "claudePath": null,
   "alwaysOnTop": true,
   "checkForUpdates": true,
+  "autoUpdate": false,
   "iconLimit": null,
   "windowX": null,
   "windowY": null,
@@ -193,6 +194,9 @@ First run writes the config, and where depends on the platform's own convention:
 - `checkForUpdates` — whether to ask GitHub once a day whether a newer release exists. `false`
   means the app makes no network requests of its own at all; the panel and the right-click menu
   simply never mention updates.
+- `autoUpdate` — whether finding a newer release should also install it, rather than waiting for
+  you to click. Off by default: an app that replaces itself and restarts while you are reading it
+  is a surprise, and the notice is one click either way. Ignored when `checkForUpdates` is off.
 - `iconLimit` — which limit the icon, taskbar bar and tooltip report, matched against a row
   label: `"session"`, `"all models"`, a model name. `null` shows everything the icon has room
   for. Easier set from the **Icon shows** menu, which lists the rows your tools actually reported.
@@ -249,8 +253,12 @@ config, and session history all live there. A fresh profile starts empty.
 - Colours: green below 75%, amber below 90%, red at or above 90%. The taskbar progress bar
   uses the matching normal/paused/error state.
 - The title bar shows how stale the reading is — `just now`, `12s ago`, `3m ago` — and, when a
-  newer release exists, `v0.6.0 available` on the right. The menu grows a **Get v0.6.0** entry
-  that opens the release page. Set `checkForUpdates` to `false` to switch this off entirely.
+  newer release exists, `update to v0.8.0` on the right. That is a button: clicking it downloads
+  the build for this machine, checks it against the `SHA256SUMS.txt` published with the release,
+  puts it in place of the running binary and restarts into it — no installer, no browser, no
+  admin prompt, and nothing replaced unless the checksum matches. The tray menu carries the same
+  action plus **Release notes…**. Set `autoUpdate` to `true` to have it happen without the click,
+  or `checkForUpdates` to `false` to switch the whole thing off.
 - An account whose figures are older than the poll — which is the normal state of a Codex
   account — says so under its name: `Codex · measured 3h ago`.
 - Reset times are grouped by moment, so the weekly and model windows that share one share a
@@ -277,6 +285,12 @@ single chosen limit, one bar per account.
 
 An account with no honest number — signed out, failed, or every window expired — contributes no
 bar at all rather than an empty one, because an empty track reads as "none used".
+
+The icon is drawn at whatever size the shell asks for on the monitor the taskbar is on — 16px at
+100%, 24px at 150% — and the bars run edge to edge of it. Both matter more than they sound: a
+fixed 16px icon is drawn smaller than its neighbours on a scaled display, and rows that round
+down individually leave a couple of the sixteen pixels unused, which is enough to read as a
+smaller icon than everything beside it.
 
 Windows 11 hides newly registered tray icons by default. Click the `^` chevron in the
 notification area and drag the badge out to pin it.
@@ -312,7 +326,7 @@ the rules that decide when a number is not fit to show:
 
 ```powershell
 dotnet test tests/AgentUsage.Tests          # portable — also runs on Linux and macOS in CI
-dotnet test tests/AgentUsage.Widget.Tests   # Win32: autostart, update check
+dotnet test tests/AgentUsage.Widget.Tests   # Win32: autostart, update check, icon layout
 ```
 
 The version lives once, in `Directory.Build.props`, and the release workflow rewrites that line.

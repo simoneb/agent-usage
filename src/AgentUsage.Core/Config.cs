@@ -54,6 +54,14 @@ public sealed class AppConfig
     public bool CheckForUpdates { get; set; } = true;
 
     /// <summary>
+    /// Whether finding a newer release should also install it, without waiting to be asked. The
+    /// download is verified against the checksum published with the release either way; this
+    /// only decides who presses the button. Ignored when <see cref="CheckForUpdates"/> is off,
+    /// and Windows-only — the CLI is installed by whatever installed it.
+    /// </summary>
+    public bool AutoUpdate { get; set; }
+
+    /// <summary>
     /// Which limit the icon and taskbar bar report, matched against a row label — "session",
     /// "all models", a model name. Null shows everything the icon has room for.
     /// </summary>

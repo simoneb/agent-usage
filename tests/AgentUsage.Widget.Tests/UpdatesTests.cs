@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using AgentUsage.Widget;
 using Xunit;
 
@@ -52,5 +53,82 @@ public class UpdatesTests
     public void StaysQuietWhenItCannotTellWhatIsRunning()
     {
         Assert.False(Updates.IsNewer("v9.9.9", null));
+    }
+
+    [Theory]
+    [InlineData(Architecture.X64, "AgentUsageWidget-win-x64.exe")]
+    [InlineData(Architecture.Arm64, "AgentUsageWidget-win-arm64.exe")]
+    public void DownloadsTheBuildThisMachineCanRun(Architecture arch, string expected)
+    {
+        Assert.Equal(expected, Updates.AssetNameFor(arch));
+    }
+
+    [Fact]
+    public void RefusesToGuessAtAnArchitectureThatIsNotShipped()
+    {
+        // Better to leave the release page as the only route than to install an x64 binary on
+        // something that cannot execute it.
+        Assert.Null(Updates.AssetNameFor(Architecture.X86));
+    }
+
+    /// <summary>
+    /// The checksum is the whole reason the swap is safe to do unattended: a truncated download
+    /// or a body that is not the asset at all has to fail here, before anything is renamed.
+    /// </summary>
+    public class Checksums
+    {
+        private const string Sums = """
+            b2eb0c0a1b0c0a1b0c0a1b0c0a1b0c0a1b0c0a1b0c0a1b0c0a1b0c0a1b0c0a1b  AgentUsageWidget-win-arm64.exe
+            3f5a9e2d3f5a9e2d3f5a9e2d3f5a9e2d3f5a9e2d3f5a9e2d3f5a9e2d3f5a9e2d  AgentUsageWidget-win-x64.exe
+            0000111122223333444455556666777788889999aaaabbbbccccddddeeeeffff  agent-usage-linux-x64
+            """;
+
+        [Fact]
+        public void PicksTheLineForTheAssetBeingInstalled()
+        {
+            Assert.Equal("3f5a9e2d3f5a9e2d3f5a9e2d3f5a9e2d3f5a9e2d3f5a9e2d3f5a9e2d3f5a9e2d",
+                Updates.HashFor(Sums, "AgentUsageWidget-win-x64.exe"));
+        }
+
+        [Fact]
+        public void DoesNotMatchAnAssetOnAPrefix()
+        {
+            // "AgentUsageWidget-win-arm64.exe" ends with the same characters a careless
+            // Contains() would accept for the x64 name and vice versa.
+            Assert.Equal("b2eb0c0a1b0c0a1b0c0a1b0c0a1b0c0a1b0c0a1b0c0a1b0c0a1b0c0a1b0c0a1b",
+                Updates.HashFor(Sums, "AgentUsageWidget-win-arm64.exe"));
+        }
+
+        [Fact]
+        public void ReportsNothingForAnAssetTheReleaseDoesNotList()
+        {
+            Assert.Null(Updates.HashFor(Sums, "AgentUsageWidget-win-x86.exe"));
+        }
+
+        [Fact]
+        public void ReadsTheBinaryModeMarkerSomeToolsWrite()
+        {
+            Assert.Equal("0000111122223333444455556666777788889999aaaabbbbccccddddeeeeffff",
+                Updates.HashFor("0000111122223333444455556666777788889999aaaabbbbccccddddeeeeffff *widget.exe",
+                    "widget.exe"));
+        }
+    }
+
+    /// <summary>
+    /// The URL comes out of a JSON payload and what it points at is about to be run as this
+    /// application. Anywhere but GitHub is refused, whatever the release says.
+    /// </summary>
+    [Theory]
+    [InlineData("https://github.com/simoneb/agent-usage/releases/download/v1.0.0/x.exe", true)]
+    [InlineData("https://objects.githubusercontent.com/github-production-release-asset/x", true)]
+    [InlineData("https://api.github.com/repos/simoneb/agent-usage/releases/assets/1", true)]
+    [InlineData("http://github.com/simoneb/agent-usage/releases/download/v1.0.0/x.exe", false)]
+    [InlineData("https://github.com.example.net/simoneb/agent-usage/x.exe", false)]
+    [InlineData("https://notgithub.com/x.exe", false)]
+    [InlineData("file:///C:/x.exe", false)]
+    [InlineData("nonsense", false)]
+    public void OnlyTrustsGitHubsOwnHosts(string url, bool trusted)
+    {
+        Assert.Equal(trusted, Updates.IsTrustedDownload(url));
     }
 }

@@ -28,6 +28,12 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- The icon layout is arithmetic on a sixteen-pixel square, which is worth testing and not
+         worth making public. -->
+    <InternalsVisibleTo Include="AgentUsage.Widget.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- Everything that is not Win32: config, providers, limit model. Shared with the CLI so the
          two can never disagree about what your usage is. -->
     <ProjectReference Include="..\AgentUsage.Core\AgentUsage.Core.csproj" />

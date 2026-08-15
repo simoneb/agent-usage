@@ -26,6 +26,11 @@ internal static class Native
     /// UI thread rather than re-entering from the worker that just finished.</summary>
     public const uint WM_APP_REFRESH_NOW = 0x8003;
 
+    /// <summary>An update attempt finishing, with its <c>InstallResult</c> in wParam.</summary>
+    public const uint WM_APP_UPDATE_DONE = 0x8004;
+
+    public const uint WM_SETCURSOR = 0x0020;
+
     public const uint WM_MOUSEMOVE = 0x0200;
     public const uint WM_LBUTTONDOWN = 0x0201;
     public const uint WM_LBUTTONUP = 0x0202;
@@ -209,7 +214,11 @@ internal static class Native
     [DllImport("user32.dll")]
     public static extern IntPtr LoadCursorW(IntPtr hInstance, IntPtr cursorName);
 
+    [DllImport("user32.dll")]
+    public static extern IntPtr SetCursor(IntPtr cursor);
+
     public static readonly IntPtr IDC_ARROW = new(32512);
+    public static readonly IntPtr IDC_HAND = new(32649);
 
     [DllImport("user32.dll")]
     public static extern IntPtr CreatePopupMenu();
@@ -232,6 +241,17 @@ internal static class Native
 
     [DllImport("user32.dll")]
     public static extern int GetSystemMetrics(int index);
+
+    /// <summary>
+    /// The DPI-aware form. GetSystemMetrics answers for the process's own awareness context,
+    /// which for a per-monitor app is the primary display — and the tray lives wherever the
+    /// taskbar is, which need not be that monitor.
+    /// </summary>
+    [DllImport("user32.dll")]
+    public static extern int GetSystemMetricsForDpi(int index, uint dpi);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    public static extern IntPtr FindWindowW(string? className, string? windowName);
 
     [DllImport("user32.dll")]
     public static extern bool SystemParametersInfoW(uint action, uint param, ref RECT data, uint winIni);
@@ -284,6 +304,10 @@ internal static class Native
     public const int SM_CXSCREEN = 0;
     public const int SM_CYSCREEN = 1;
 
+    /// <summary>The box the shell draws a tray icon into, and the one it draws a window icon into.</summary>
+    public const int SM_CXICON = 11;
+    public const int SM_CXSMICON = 49;
+
     public const uint MF_STRING = 0x0000;
     public const uint MF_POPUP = 0x0010;
     public const uint MF_SEPARATOR = 0x0800;
@@ -295,6 +319,15 @@ internal static class Native
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     public static extern int DrawTextW(IntPtr hdc, string text, int count, ref RECT rect, uint format);
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct SIZE
+    {
+        public int Width, Height;
+    }
+
+    [DllImport("gdi32.dll", CharSet = CharSet.Unicode)]
+    public static extern bool GetTextExtentPoint32W(IntPtr hdc, string text, int count, out SIZE size);
 
     public const uint DT_LEFT = 0x0000;
     public const uint DT_RIGHT = 0x0002;
@@ -536,6 +569,14 @@ internal static class Native
     [DllImport("winhttp.dll", SetLastError = true)]
     public static extern bool WinHttpSetTimeouts(
         IntPtr handle, int resolve, int connect, int send, int receive);
+
+    [DllImport("winhttp.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    public static extern bool WinHttpQueryHeaders(
+        IntPtr request, uint infoLevel, string? name,
+        ref uint buffer, ref uint bufferLength, IntPtr index);
+
+    public const uint WINHTTP_QUERY_STATUS_CODE = 19;
+    public const uint WINHTTP_QUERY_FLAG_NUMBER = 0x20000000;
 
     [DllImport("winhttp.dll", SetLastError = true)]
     public static extern bool WinHttpCloseHandle(IntPtr handle);
