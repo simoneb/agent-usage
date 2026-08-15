@@ -159,8 +159,15 @@ cap. `display` is preformatted, invariantly, for the common case where you just 
 
 ## Configuration
 
-First run writes `%APPDATA%\ClaudeUsageWidget\config.json` on Windows, or
-`~/.config/agent-usage/config.json` elsewhere:
+First run writes the config, and where depends on the platform's own convention:
+
+| | |
+|---|---|
+| Windows | `%APPDATA%\ClaudeUsageWidget\config.json` |
+| macOS | `~/Library/Application Support/agent-usage/config.json` |
+| Linux | `~/.config/agent-usage/config.json` (or `$XDG_CONFIG_HOME`) |
+
+`agent-usage --config-path` prints the one in effect.
 
 ```json
 {

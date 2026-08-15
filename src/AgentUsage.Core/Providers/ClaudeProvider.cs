@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.Json.Serialization.Metadata;
@@ -87,6 +88,14 @@ public sealed partial class ClaudeProvider : IUsageProvider
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
             status.Error = $"timed out after {context.Timeout.TotalSeconds:0}s";
+            return status;
+        }
+        catch (Win32Exception)
+        {
+            // What the runtime says here is "ErrorStartingProcess, claude, /tmp/, No such file or
+            // directory", which describes the mechanism rather than the problem. The problem is
+            // almost always that Claude Code is not installed, and that is what to say.
+            status.Error = $"could not run \"{claudePath}\" — is Claude Code installed and on PATH?";
             return status;
         }
         catch (Exception ex)

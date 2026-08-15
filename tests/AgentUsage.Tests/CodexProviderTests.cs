@@ -202,6 +202,29 @@ public class CodexProviderTests
     }
 
     [Fact]
+    public void SaysWhatIsWrongWhenTheClaudeCliIsNotThere()
+    {
+        // This is the state of every machine that has not installed Claude Code, including every
+        // CI runner. The runtime's own words for it are "ErrorStartingProcess, claude, /tmp/,
+        // No such file or directory", which explains the mechanism and not the problem.
+        var account = new AccountConfig { Label = "work", Provider = ProviderIds.Claude };
+
+        var context = new ProbeContext
+        {
+            ClaudePath = Path.Combine(Path.GetTempPath(), "definitely-not-a-real-claude-binary"),
+        };
+
+        var status = new ClaudeProvider()
+            .ProbeAsync(account, context, CancellationToken.None)
+            .GetAwaiter().GetResult();
+
+        Assert.NotNull(status.Error);
+        Assert.Contains("is Claude Code installed", status.Error);
+        Assert.Empty(status.Limits);
+        Assert.Null(status.HeadlinePercent);
+    }
+
+    [Fact]
     public void ReportsAnErrorRatherThanZeroWhenThereIsNothingToRead()
     {
         var account = new AccountConfig
