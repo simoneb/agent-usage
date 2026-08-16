@@ -37,6 +37,9 @@ internal static class Native
     public const uint WM_RBUTTONUP = 0x0205;
     public const uint WM_MOUSELEAVE = 0x02A3;
 
+    public const uint WM_KEYDOWN = 0x0100;
+    public const int VK_ESCAPE = 0x1B;
+
     // Custom iconic (taskbar) bitmap messages.
     public const uint WM_DWMSENDICONICTHUMBNAIL = 0x0323;
     public const uint WM_DWMSENDICONICLIVEPREVIEW = 0x0326;
@@ -345,6 +348,9 @@ internal static class Native
 
     [DllImport("user32.dll")]
     public static extern bool IsWindowVisible(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    public static extern bool IsIconic(IntPtr hWnd);
 
     [StructLayout(LayoutKind.Sequential)]
     public struct TRACKMOUSEEVENT

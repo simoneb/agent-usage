@@ -264,6 +264,14 @@ internal sealed class Widget : IDisposable
                 ShowMenu();
                 return IntPtr.Zero;
 
+            case WM_KEYDOWN:
+                if ((int)wParam.ToInt64() == VK_ESCAPE)
+                {
+                    ShowWindow(hwnd, SW_MINIMIZE);
+                    return IntPtr.Zero;
+                }
+                break;
+
             case WM_APP_TRAY:
                 switch ((uint)(lParam.ToInt64() & 0xFFFF))
                 {
@@ -925,14 +933,17 @@ internal sealed class Widget : IDisposable
 
     private void ShowPanel()
     {
-        ShowWindow(_hwnd, SW_SHOW);
+        // A minimised window is still "shown", so SW_SHOW would leave it on the taskbar.
+        ShowWindow(_hwnd, IsIconic(_hwnd) ? SW_RESTORE : SW_SHOW);
         ApplyTopmost();
         SetForegroundWindow(_hwnd);
     }
 
     private void TogglePanel()
     {
-        if (IsWindowVisible(_hwnd)) HidePanel();
+        // Minimised counts as away: the tray icon brings the panel back rather than toggling
+        // the taskbar button, which is what the taskbar button itself is for.
+        if (IsWindowVisible(_hwnd) && !IsIconic(_hwnd)) HidePanel();
         else ShowPanel();
     }
 

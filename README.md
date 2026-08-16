@@ -242,9 +242,11 @@ config, and session history all live there. A fresh profile starts empty.
 
 ## Interaction
 
-- **Minimise button** (top right) sends the panel to the taskbar. The taskbar button stays
-  live — hover it for the full panel as a DWM preview.
+- **Minimise button** (top right), or **Esc** while the panel has focus, sends it to the taskbar.
+  The taskbar button stays live — hover it for the full panel as a DWM preview.
 - **Close button** hides the panel to the tray. It does not exit.
+- **Clicking the tray icon** brings the panel back, whether it was hidden or minimised, and
+  hides it again only when it is already in front of you.
 - **Exit** lives in the tray icon's right-click menu, and in the panel's own right-click menu.
 - **Drag anywhere** else on the panel to move it. Position is saved.
 - **Double-click** to refresh immediately.
