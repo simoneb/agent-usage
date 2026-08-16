@@ -216,7 +216,8 @@
   .row-head { display: flex; align-items: baseline; gap: 6px; height: 16px; }
   .row-label { color: #a8a8b0; font-size: 12px; }
   .row-reset { color: #6e6e78; font-size: 12px; margin-left: auto; }
-  .row .track { position: relative; margin-top: 4px; }
+  /* Block, or the span is inline and a height does nothing to it — the same trap the fill is in. */
+  .row .track { display: block; position: relative; margin-top: 4px; }
   /* Where an even burn would have reached by now. */
   .pace { position: absolute; top: 0; bottom: 0; width: 2px; background: #d2d2dc; }
   .track { height: 8px; border-radius: 4px; background: var(--slab-track); overflow: hidden; }
