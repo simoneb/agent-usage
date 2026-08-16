@@ -105,5 +105,11 @@ arbitrary otherwise. Commit subjects are the same voice: a sentence saying what 
 ("Name the running build at the top of the context menu"), not a conventional-commits prefix.
 British spelling in user-facing strings ("Minimise to taskbar").
 
-README.md is the user-facing documentation and is kept in step with behaviour changes; `docs/`
-is the landing page.
+**A behaviour change is not finished until the docs match it.** Three places, every time:
+
+- `README.md` — the user-facing documentation, in particular the **Interaction** section and the
+  `--json` contract.
+- `docs/index.html` — the landing page. Its hero holds a hand-built HTML replica of the panel
+  (`.panel`, `.row`, `.track`, `.pace`), so any change to how the panel looks has to be made
+  there too or the page starts advertising a widget that no longer exists.
+- `CLAUDE.md` — this file, when the architecture or the workflow moved.

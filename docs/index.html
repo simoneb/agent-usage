@@ -210,10 +210,15 @@
   .acct-name { font-size: 15px; font-weight: 600; }
   .acct-pct { font-family: var(--mono); font-size: 14px; font-weight: 600; }
   .acct-mail { color: var(--slab-soft); font-size: 12px; margin-bottom: 8px; }
-  .acct-reset { color: var(--slab-faint); font-size: 12px; margin-top: 2px; }
 
-  .row { display: grid; grid-template-columns: 48px 1fr 44px; align-items: center; gap: 6px; height: 24px; }
+  /* A limit is two lines: what it is and how it stands, then the bar under it. */
+  .row + .row { margin-top: 8px; }
+  .row-head { display: flex; align-items: baseline; gap: 6px; height: 16px; }
   .row-label { color: #a8a8b0; font-size: 12px; }
+  .row-reset { color: #6e6e78; font-size: 12px; margin-left: auto; }
+  .row .track { position: relative; margin-top: 4px; }
+  /* Where an even burn would have reached by now. */
+  .pace { position: absolute; top: 0; bottom: 0; width: 2px; background: #d2d2dc; }
   .track { height: 8px; border-radius: 4px; background: var(--slab-track); overflow: hidden; }
   .fill {
     /* Inline by default, and width does nothing to an inline box. */
@@ -222,7 +227,9 @@
     width: 0;
     transition: width .9s cubic-bezier(.22, .8, .28, 1), background-color .25s linear;
   }
-  .row-pct { font-family: var(--mono); font-size: 12px; font-weight: 600; text-align: right; }
+  .row-pct { font-family: var(--mono); font-size: 12px; font-weight: 600; }
+
+  .caption { color: var(--ink-soft); font-size: .85rem; line-height: 1.5; margin: 0; }
 
   /* ---- the taskbar replica ---- */
 
@@ -439,17 +446,21 @@
             </div>
             <div class="acct-mail">you@company.com</div>
             <div class="row">
-              <span class="row-label">session</span>
-              <span class="track"><i class="fill" data-fill="14"></i></span>
-              <span class="row-pct">14%</span>
+              <div class="row-head">
+                <span class="row-label">session</span>
+                <span class="row-reset">in 1h 32m</span>
+                <span class="row-pct">14%</span>
+              </div>
+              <span class="track"><i class="fill" data-fill="14"></i><i class="pace" style="left: 68%"></i></span>
             </div>
             <div class="row">
-              <span class="row-label">week</span>
-              <span class="track"><i class="fill" id="weekFill"></i></span>
-              <span class="row-pct" id="weekPct">94%</span>
+              <div class="row-head">
+                <span class="row-label">week</span>
+                <span class="row-reset">in 10h 32m</span>
+                <span class="row-pct" id="weekPct">94%</span>
+              </div>
+              <span class="track"><i class="fill" id="weekFill"></i><i class="pace" style="left: 62%"></i></span>
             </div>
-            <div class="acct-reset">session resets in 1h 32m</div>
-            <div class="acct-reset">week resets in 10h 32m</div>
           </div>
 
           <div class="acct">
@@ -459,17 +470,21 @@
             </div>
             <div class="acct-mail">you@gmail.com</div>
             <div class="row">
-              <span class="row-label">session</span>
-              <span class="track"><i class="fill" data-fill="56"></i></span>
-              <span class="row-pct" style="color: var(--ok-lit)">56%</span>
+              <div class="row-head">
+                <span class="row-label">session</span>
+                <span class="row-reset">in 3h 1m</span>
+                <span class="row-pct" style="color: var(--ok-lit)">56%</span>
+              </div>
+              <span class="track"><i class="fill" data-fill="56"></i><i class="pace" style="left: 40%"></i></span>
             </div>
             <div class="row">
-              <span class="row-label">week</span>
-              <span class="track"><i class="fill" data-fill="5"></i></span>
-              <span class="row-pct" style="color: var(--ok-lit)">5%</span>
+              <div class="row-head">
+                <span class="row-label">week</span>
+                <span class="row-reset">Aug 21, 8:59pm</span>
+                <span class="row-pct" style="color: var(--ok-lit)">5%</span>
+              </div>
+              <span class="track"><i class="fill" data-fill="5"></i><i class="pace" style="left: 28%"></i></span>
             </div>
-            <div class="acct-reset">session resets in 3h 1m</div>
-            <div class="acct-reset">week resets Aug 21, 8:59pm</div>
           </div>
         </div>
       </div>
@@ -485,6 +500,11 @@
         <span class="taskbar-name">Agent Usage</span>
         <span class="taskbar-progress"><i id="taskFill"></i></span>
       </div>
+
+      <p class="caption">
+        The pale mark on each bar is where an even burn would have reached by now. Fill short of
+        it is spare; fill past it is a window that runs out before it resets.
+      </p>
 
       <div class="demo">
         <div class="demo-head">
