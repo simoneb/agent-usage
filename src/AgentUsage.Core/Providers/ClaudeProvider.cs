@@ -113,12 +113,25 @@ public sealed partial class ClaudeProvider : IUsageProvider
         {
             if (!int.TryParse(m.Groups[2].Value, out var pct)) continue;
 
+            var label = m.Groups[1].Value.Trim();
             var resets = m.Groups[3].Success ? m.Groups[3].Value.Trim() : null;
-            rows.Add(LimitRow.Percentage(m.Groups[1].Value.Trim(), pct, resets));
+
+            rows.Add(LimitRow.Percentage(label, pct, resets, window: WindowFor(label)));
         }
 
         return rows;
     }
+
+    /// <summary>
+    /// How long a window runs. `/usage` never prints this, but it names the window, and the two
+    /// Claude has are fixed: a session is five hours, a week is seven days. A row named anything
+    /// else gets no length rather than a plausible one — the length is the denominator of the
+    /// pace figure, and a guessed denominator produces a confident wrong answer.
+    /// </summary>
+    public static TimeSpan? WindowFor(string label) =>
+        label.Contains("session", StringComparison.OrdinalIgnoreCase) ? TimeSpan.FromHours(5)
+        : label.Contains("week", StringComparison.OrdinalIgnoreCase) ? TimeSpan.FromDays(7)
+        : null;
 
     /// <summary>Locates the Claude CLI. Falls back to the bare name and lets the OS search PATH.</summary>
     public static string ResolveClaudePath(string? configured)

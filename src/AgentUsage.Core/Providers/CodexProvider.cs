@@ -213,7 +213,12 @@ public sealed class CodexProvider : IUsageProvider
                 resetsAt: window.ResetsAt is long unix and > 0
                     ? DateTimeOffset.FromUnixTimeSeconds(unix)
                     : null,
-                asOf: now));
+                asOf: now,
+                // Codex is the one provider that states how long its windows are, so nothing has
+                // to be inferred from the label here.
+                window: window.WindowMinutes is int minutes and > 0
+                    ? TimeSpan.FromMinutes(minutes)
+                    : null));
         }
     }
 

@@ -89,6 +89,12 @@ internal static class Renderer
 {
     public const int BaseWidth = 330;
 
+    /// <summary>
+    /// A limit is two lines: what it is and how it stands on top, the bar under it — the shape
+    /// Claude Desktop uses, and the one that leaves the bar wide enough to read a pace mark off.
+    /// </summary>
+    private const int LimitRowHeight = 32;
+
     /// <summary>Strip along the top holding the minimise and close buttons.</summary>
     public const int TitleBarHeight = 26;
     private const int ButtonWidth = 32;
@@ -151,6 +157,7 @@ internal static class Renderer
     private static readonly uint MutedColor = Rgb(0x6E, 0x6E, 0x78);
     private static readonly uint TrackColor = Rgb(0x2E, 0x2E, 0x36);
     private static readonly uint DividerColor = Rgb(0x26, 0x26, 0x2C);
+    private static readonly uint PaceColor = Rgb(0xD2, 0xD2, 0xDC);
 
     public static uint ColorFor(int percent) => percent switch
     {
@@ -185,8 +192,7 @@ internal static class Renderer
             }
             else
             {
-                h += s.Limits.Count * S(24, scale);
-                h += ResetGroups(s, DateTimeOffset.Now).Count * S(16, scale);
+                h += s.Limits.Count * S(LimitRowHeight, scale);
             }
 
             if (i < statuses.Count - 1) h += S(16, scale);       // divider gap
@@ -290,21 +296,12 @@ internal static class Renderer
             }
             else
             {
-                foreach (var limit in s.Limits)
-                {
-                    DrawLimitRow(hdc, limit, padX, y, contentWidth, fonts, scale);
-                    y += S(24, scale);
-                }
-
-                SelectObject(hdc, fonts.Sub);
-
                 var now = DateTimeOffset.Now;
 
-                foreach (var (labels, text) in ResetGroups(s, now))
+                foreach (var limit in s.Limits)
                 {
-                    DrawLine(hdc, $"{labels} resets {text}",
-                        padX, y, contentWidth, S(16, scale), MutedColor, DT_LEFT);
-                    y += S(16, scale);
+                    DrawLimitRow(hdc, limit, padX, y, contentWidth, fonts, scale, now);
+                    y += S(LimitRowHeight, scale);
                 }
             }
 
@@ -370,46 +367,96 @@ internal static class Renderer
     }
 
     private static void DrawLimitRow(
-        IntPtr hdc, LimitRow limit, int x, int y, int contentWidth, FontSet fonts, double scale)
+        IntPtr hdc, LimitRow limit, int x, int y, int contentWidth, FontSet fonts, double scale,
+        DateTimeOffset now)
     {
-        var labelWidth = S(48, scale);
+        var textHeight = S(16, scale);
 
         // Wider than a percentage needs: a count reads "412 / 1500" and a window that has rolled
         // over reads "stale", and both have to fit without being clipped to something misleading.
         var valueWidth = S(58, scale);
-        var rowHeight = S(24, scale);
-
-        SelectObject(hdc, fonts.Label);
-        DrawLine(hdc, ShortLabel(limit.Label), x, y, labelWidth, rowHeight, LabelColor,
-            DT_LEFT | DT_VCENTER);
-
-        var barLeft = x + labelWidth + S(6, scale);
-        var barRight = x + contentWidth - valueWidth - S(6, scale);
-        var barHeight = S(8, scale);
-        var barTop = y + (rowHeight - barHeight) / 2;
+        var labelWidth = S(58, scale);
 
         var percent = limit.Percent;
         var color = percent is int p ? ColorFor(p) : MutedColor;
 
-        FillRoundRect(hdc, barLeft, barTop, barRight, barTop + barHeight, TrackColor);
+        SelectObject(hdc, fonts.Label);
+        DrawLine(hdc, ShortLabel(limit.Label), x, y, labelWidth, textHeight, LabelColor,
+            DT_LEFT | DT_VCENTER);
+
+        SelectObject(hdc, fonts.Value);
+        DrawLine(hdc, limit.Display, x + contentWidth - valueWidth, y, valueWidth, textHeight,
+            color, DT_RIGHT | DT_VCENTER);
+
+        // Between the two, right-aligned so it reads as one phrase with the number it qualifies:
+        // how this window stands against the clock, then when the clock runs out.
+        var noteLeft = x + labelWidth + S(4, scale);
+        var noteRight = x + contentWidth - valueWidth - S(6, scale);
+
+        SelectObject(hdc, fonts.Sub);
+
+        if (ResetText(limit, now) is string resets)
+        {
+            DrawLine(hdc, resets, noteLeft, y, noteRight - noteLeft, textHeight,
+                MutedColor, DT_RIGHT | DT_VCENTER);
+        }
+
+        var barTop = y + textHeight + S(4, scale);
+        var barHeight = S(8, scale);
+        var barRight = x + contentWidth;
+
+        FillRoundRect(hdc, x, barTop, barRight, barTop + barHeight, TrackColor);
 
         // No percentage means no bar. A limit counted in requests with no stated ceiling, or a
         // window that has already reset, has nothing to fill a track with — and a bar drawn at
         // zero would read as "none used", which is a different claim entirely.
         if (percent is int value)
         {
-            var fillWidth = (int)Math.Round((barRight - barLeft) * Math.Clamp(value, 0, 100) / 100.0);
+            var fillWidth = (int)Math.Round(contentWidth * Math.Clamp(value, 0, 100) / 100.0);
             if (fillWidth > 0)
             {
                 // Keep the fill at least as wide as its own rounding, or the cap renders as a sliver.
                 fillWidth = Math.Max(fillWidth, barHeight);
-                FillRoundRect(hdc, barLeft, barTop, barLeft + fillWidth, barTop + barHeight, color);
+                FillRoundRect(hdc, x, barTop, x + fillWidth, barTop + barHeight, color);
+            }
+
+            // Where an even burn would have reached by now. Fill short of this mark is spare;
+            // fill past it is a window that runs out before it resets. Drawn inside the bar and
+            // over the fill, because the comparison is the point and the row is not the place
+            // for a second number saying the same thing.
+            if (limit.ElapsedPercent(now) is int elapsed)
+            {
+                var thickness = Math.Max(1, S(2, scale));
+                var markLeft = x + (int)Math.Round((contentWidth - thickness) * elapsed / 100.0);
+                var mark = new RECT
+                {
+                    Left = markLeft,
+                    Top = barTop,
+                    Right = markLeft + thickness,
+                    Bottom = barTop + barHeight,
+                };
+
+                FillSolid(hdc, mark, PaceColor);
             }
         }
+    }
 
-        SelectObject(hdc, fonts.Value);
-        DrawLine(hdc, limit.Display, x + contentWidth - valueWidth, y, valueWidth, rowHeight,
-            color, DT_RIGHT | DT_VCENTER);
+    /// <summary>
+    /// When this window rolls over: a countdown while that is the more useful answer, the date
+    /// once it is not. The word "resets" is dropped now that the stamp sits on the row it belongs
+    /// to — every pixel it costs is one the panel is wider by, on every row.
+    /// </summary>
+    private static string? ResetText(LimitRow limit, DateTimeOffset now)
+    {
+        // A window that has already rolled over has nothing to count down to.
+        if (limit.Expired) return null;
+
+        if (limit.ResetsAt is DateTimeOffset at)
+            return ResetTime.Describe(at, now);
+
+        return limit.Resets is string stamp
+            ? ResetTime.Describe(stamp, now.LocalDateTime)
+            : null;
     }
 
     /// <summary>
@@ -444,54 +491,6 @@ internal static class Renderer
 
         return label.Replace("Current ", "", StringComparison.OrdinalIgnoreCase).ToLowerInvariant();
     }
-
-    /// <summary>
-    /// Reset times, one line per distinct moment, naming the rows that share it. The session
-    /// resets in hours and the weekly windows in days, so a single line could only ever be
-    /// right about one of them — and the weekly rows almost always share a reset, which is
-    /// what keeps this to two lines rather than one per row.
-    /// </summary>
-    private static List<(string Labels, string Text)> ResetGroups(AccountStatus s, DateTimeOffset now)
-    {
-        var groups = new List<(string Key, string Labels, string Text)>();
-
-        foreach (var limit in s.Limits)
-        {
-            // A window that has already rolled over has nothing to count down to.
-            if (limit.Expired) continue;
-
-            string key, text;
-
-            if (limit.ResetsAt is DateTimeOffset at)
-            {
-                // An exact moment, which is what a provider that reports a timestamp gives us.
-                key = at.ToString("O");
-                text = ResetTime.Describe(at, now);
-            }
-            else if (limit.Resets is string stamp)
-            {
-                // Grouped on the stamp rather than its description: two resets twenty minutes
-                // apart can both describe as "in 3h" without being the same moment.
-                key = ResetTime.StripZone(stamp);
-                text = ResetTime.Describe(stamp, now.LocalDateTime);
-            }
-            else
-            {
-                continue;
-            }
-
-            var label = ShortLabel(limit.Label);
-            var existing = groups.FindIndex(g => g.Key == key);
-
-            if (existing >= 0)
-                groups[existing] = (key, groups[existing].Labels + " · " + label, text);
-            else
-                groups.Add((key, label, text));
-        }
-
-        return groups.ConvertAll(g => (g.Labels, g.Text));
-    }
-
 
     private static void DrawLine(
         IntPtr hdc, string text, int x, int y, int width, int height, uint color, uint format)

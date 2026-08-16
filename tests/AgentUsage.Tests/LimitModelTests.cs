@@ -82,6 +82,69 @@ public class LimitModelTests
     }
 
     [Fact]
+    public void PaceComparesConsumptionWithTheTimeGone()
+    {
+        var now = new DateTimeOffset(2026, 8, 16, 12, 0, 0, TimeSpan.Zero);
+
+        // Half a week gone, 62% of it spent: twelve points ahead of an even burn.
+        var row = LimitRow.Percentage("Current week", 62,
+            resetsAt: now.AddDays(3.5), window: TimeSpan.FromDays(7));
+
+        Assert.Equal(50, row.ElapsedPercent(now));
+        Assert.Equal(12, row.PaceDelta(now));
+    }
+
+    [Fact]
+    public void BeingUnderTheClockIsANegativeDelta()
+    {
+        var now = new DateTimeOffset(2026, 8, 16, 12, 0, 0, TimeSpan.Zero);
+
+        var row = LimitRow.Percentage("Current session", 20,
+            resetsAt: now.AddHours(1), window: TimeSpan.FromHours(5));
+
+        Assert.Equal(80, row.ElapsedPercent(now));
+        Assert.Equal(-60, row.PaceDelta(now));
+    }
+
+    [Fact]
+    public void AWindowOfUnknownLengthHasNoPace()
+    {
+        var now = DateTimeOffset.Now;
+
+        // Codex reports the length; a provider that does not gets no mark on its bar rather than
+        // one placed from a guessed denominator.
+        var row = LimitRow.Percentage("Premium requests", 40, resetsAt: now.AddDays(2));
+
+        Assert.Null(row.ElapsedPercent(now));
+        Assert.Null(row.PaceDelta(now));
+    }
+
+    [Fact]
+    public void AnExpiredWindowHasNoPaceEither()
+    {
+        var now = DateTimeOffset.Now;
+
+        var row = LimitRow.Percentage("Current week", 93, resetsAt: now.AddDays(-1),
+            asOf: now, window: TimeSpan.FromDays(7));
+
+        Assert.True(row.Expired);
+        Assert.Null(row.ElapsedPercent(now));
+        Assert.Null(row.PaceDelta(now));
+    }
+
+    [Fact]
+    public void TheEndOfAWindowCanComeFromTheStampClaudePrints()
+    {
+        // Claude gives prose, not a timestamp, and the pace has to work from it all the same.
+        var now = new DateTimeOffset(2026, 8, 16, 12, 0, 0, TimeSpan.Zero);
+        var row = LimitRow.Percentage("Current session", 10,
+            resets: "Aug 16, 2:00pm (Europe/Rome)", window: TimeSpan.FromHours(5));
+
+        Assert.Equal(now.AddHours(2), row.EndsAt(now));
+        Assert.Equal(60, row.ElapsedPercent(now));
+    }
+
+    [Fact]
     public void AnAccountWhoseEveryWindowExpiredHasNoHeadlineAtAll()
     {
         var status = new AccountStatus

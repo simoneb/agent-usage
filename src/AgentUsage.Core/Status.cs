@@ -40,6 +40,15 @@ public sealed record LimitRow
     public DateTimeOffset? ResetsAt { get; init; }
 
     /// <summary>
+    /// How long this window runs end to end. Codex states it outright; for Claude it follows from
+    /// which window the row is, and a row neither provider explains gets none.
+    ///
+    /// Without it a percentage has no scale to be read against: 60% of a week is comfortable on
+    /// the sixth day and alarming on the first, and the number alone cannot tell you which.
+    /// </summary>
+    public TimeSpan? Window { get; init; }
+
+    /// <summary>
     /// True when this window had already reset by the time the reading was taken — so
     /// <see cref="Value"/> describes a window that no longer exists.
     ///
@@ -79,6 +88,43 @@ public sealed record LimitRow
         _ => string.Create(Culture, $"{Value:0.##}"),
     };
 
+    /// <summary>
+    /// When this window rolls over: the timestamp where the provider reports one, and the stamp
+    /// it printed otherwise. Null when neither can be read, which is also when there is no pace
+    /// to work out.
+    /// </summary>
+    public DateTimeOffset? EndsAt(DateTimeOffset now)
+    {
+        if (ResetsAt is DateTimeOffset at) return at;
+
+        return Resets is string stamp && ResetTime.TryParse(stamp, now.LocalDateTime, out var parsed)
+            ? new DateTimeOffset(parsed, now.Offset)
+            : null;
+    }
+
+    /// <summary>
+    /// How far through the window we are, 0-100 — the figure <see cref="Percent"/> has to be read
+    /// against. Null whenever the window's length or its end is unknown; a bar is better off
+    /// without a mark than with one placed by guesswork.
+    /// </summary>
+    public int? ElapsedPercent(DateTimeOffset now)
+    {
+        if (Expired || Window is not TimeSpan length || length <= TimeSpan.Zero) return null;
+        if (EndsAt(now) is not DateTimeOffset end) return null;
+
+        var elapsed = (length - (end - now)).TotalSeconds / length.TotalSeconds * 100;
+
+        return (int)Math.Round(Math.Clamp(elapsed, 0, 100));
+    }
+
+    /// <summary>
+    /// Consumption minus time: +12 is twelve points ahead of spending this window evenly, -8 that
+    /// far behind. Null when either half is unknown, since a delta from a missing number is not a
+    /// smaller claim than the number itself.
+    /// </summary>
+    public int? PaceDelta(DateTimeOffset now) =>
+        Percent is int used && ElapsedPercent(now) is int elapsed ? used - elapsed : null;
+
     private static CultureInfo Culture => CultureInfo.InvariantCulture;
 
     private string Money(double amount) => Unit is null or "USD"
@@ -91,7 +137,8 @@ public sealed record LimitRow
         double percent,
         string? resets = null,
         DateTimeOffset? resetsAt = null,
-        DateTimeOffset? asOf = null) => new()
+        DateTimeOffset? asOf = null,
+        TimeSpan? window = null) => new()
     {
         Label = label,
         Kind = LimitKind.Percent,
@@ -99,6 +146,7 @@ public sealed record LimitRow
         Max = 100,
         Resets = resets,
         ResetsAt = resetsAt,
+        Window = window,
         Expired = asOf is DateTimeOffset now && resetsAt is DateTimeOffset at && at <= now,
     };
 }

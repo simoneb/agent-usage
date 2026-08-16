@@ -115,6 +115,13 @@ public sealed class SnapshotLimit
     public string? Resets { get; set; }
     public DateTimeOffset? ResetsAt { get; set; }
 
+    /// <summary>
+    /// How long this window runs end to end, where it is known. With <see cref="ResetsAt"/> it
+    /// says how far through the window a reading sits, which is what tells 60% of a week that is
+    /// nearly over apart from 60% of one that has just begun.
+    /// </summary>
+    public double? WindowSeconds { get; set; }
+
     public static SnapshotLimit From(LimitRow row) => new()
     {
         Label = row.Label,
@@ -132,5 +139,6 @@ public sealed class SnapshotLimit
         Display = row.Display,
         Resets = row.Resets,
         ResetsAt = row.ResetsAt,
+        WindowSeconds = row.Window?.TotalSeconds,
     };
 }

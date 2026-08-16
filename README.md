@@ -139,7 +139,8 @@ moves if one ever has to change meaning.
           "percent": 42,
           "display": "42%",
           "resets": "Aug 22, 11:59am (Europe/Rome)",
-          "resetsAt": "2026-08-22T09:59:00+00:00"
+          "resetsAt": "2026-08-22T09:59:00+00:00",
+          "windowSeconds": 604800
         }
       ]
     }
@@ -154,6 +155,10 @@ Two things to honour if you build on it:
   Rendering it as `0` turns "I don't know" into "you have used none of it".
 - **`ageSeconds` matters.** A Codex reading can be hours old and still be the best available. Say
   so, the way the widget and the bundled scripts do.
+- **`windowSeconds` with `resetsAt` gives the pace.** How far through the window you are is
+  `1 - (resetsAt - now) / windowSeconds`, and the interesting number is `percent` minus that:
+  60% of a week is comfortable on the sixth day and alarming on the first. It is null wherever the
+  provider does not say how long its window runs and the label does not imply it.
 
 `kind` is `percent`, `count` or `currency`, because providers genuinely disagree about what a
 limit *is*: a proportion of a rolling window, a number of requests per month, money against a
@@ -265,9 +270,16 @@ config, and session history all live there. A fresh profile starts empty.
   or `checkForUpdates` to `false` to switch the whole thing off.
 - An account whose figures are older than the poll — which is the normal state of a Codex
   account — says so under its name: `Codex · measured 3h ago`.
-- Reset times are grouped by moment, so the weekly and model windows that share one share a
-  line. Anything resetting within 24 hours is counted down (`session resets in 1h 32m`);
-  further out, the date is the clearer answer (`week resets Aug 21, 8:59pm`).
+- Each limit is a line and a bar under it: the window on the left, then how it stands against the
+  clock and when it resets, then the percentage. Anything resetting within 24 hours is counted
+  down (`in 1h 32m`); further out, the date is the clearer answer (`Aug 21, 8:59pm`).
+- **The pale mark on each bar is where an even burn would have reached by now** — half the week
+  gone, half the week's allowance spent. Fill short of the mark is spare; fill past it is a
+  window that runs out before it resets. It is a mark rather than another number because the
+  comparison is the whole point, and the bar already draws it.
+  The mark needs to know how long the window runs. Codex reports that outright; for Claude it
+  follows from which window the row is — a session is five hours, a week seven days. A row
+  neither explains gets no mark rather than one placed by guesswork.
 
 ## What the icon shows
 
