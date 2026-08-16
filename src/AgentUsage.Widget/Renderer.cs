@@ -388,10 +388,13 @@ internal static class Renderer
         DrawLine(hdc, limit.Display, x + contentWidth - valueWidth, y, valueWidth, textHeight,
             color, DT_RIGHT | DT_VCENTER);
 
-        // Between the two, right-aligned so it reads as one phrase with the number it qualifies:
-        // how this window stands against the clock, then when the clock runs out.
+        // Measured rather than assumed to be the column: the value column is wide enough for
+        // "412 / 1500", so a row reading "11%" would otherwise leave the reset stamp floating
+        // half an inch off the number it sits beside, and no two rows would agree on the gap.
+        GetTextExtentPoint32W(hdc, limit.Display, limit.Display.Length, out var valueSize);
+
         var noteLeft = x + labelWidth + S(4, scale);
-        var noteRight = x + contentWidth - valueWidth - S(6, scale);
+        var noteRight = x + contentWidth - valueSize.Width - S(6, scale);
 
         SelectObject(hdc, fonts.Sub);
 
