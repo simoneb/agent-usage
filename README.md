@@ -83,12 +83,12 @@ runtime. They are unsigned, so SmartScreen asks once on Windows and Gatekeeper w
 ```console
 $ agent-usage
 work · claude · max
-  session   1%   resets in 4h 16m
-  week      0%   resets Aug 22, 11:59am
+  session   1%  -18 pace   resets in 4h 16m
+  week      0%  -35 pace   resets Aug 22, 11:59am
 
 codex · codex · plus  (measured 3h ago)
-  session  12%   resets in 1h 4m
-  week      3%   resets Aug 18, 2pm
+  session  12%  -67 pace   resets in 1h 4m
+  week      3%  -52 pace   resets Aug 18, 2pm
 
 $ agent-usage --brief
 work 0% · codex 3%
@@ -140,7 +140,9 @@ moves if one ever has to change meaning.
           "display": "42%",
           "resets": "Aug 22, 11:59am (Europe/Rome)",
           "resetsAt": "2026-08-22T09:59:00+00:00",
-          "windowSeconds": 604800
+          "windowSeconds": 604800,
+          "elapsedPercent": 30,
+          "paceDelta": 12
         }
       ]
     }
@@ -155,10 +157,13 @@ Two things to honour if you build on it:
   Rendering it as `0` turns "I don't know" into "you have used none of it".
 - **`ageSeconds` matters.** A Codex reading can be hours old and still be the best available. Say
   so, the way the widget and the bundled scripts do.
-- **`windowSeconds` with `resetsAt` gives the pace.** How far through the window you are is
-  `1 - (resetsAt - now) / windowSeconds`, and the interesting number is `percent` minus that:
-  60% of a week is comfortable on the sixth day and alarming on the first. It is null wherever the
-  provider does not say how long its window runs and the label does not imply it.
+- **`paceDelta` is the number to act on.** `elapsedPercent` is how far through the window you
+  are — `100 × (1 - (resetsAt - now) / windowSeconds)` — and `paceDelta` is `percent` minus that:
+  `+12` is twelve points more of the window spent than has gone by, `-8` that much in hand. 60% of
+  a week is comfortable on the sixth day and alarming on the first, and `percent` alone cannot
+  tell you which. Both are null wherever the provider does not say how long its window runs and
+  the label does not imply it — a delta from a missing number is not a smaller claim than the
+  missing number itself.
 
 `kind` is `percent`, `count` or `currency`, because providers genuinely disagree about what a
 limit *is*: a proportion of a rolling window, a number of requests per month, money against a
@@ -273,13 +278,22 @@ config, and session history all live there. A fresh profile starts empty.
 - Each limit is a line and a bar under it: the window on the left, then how it stands against the
   clock and when it resets, then the percentage. Anything resetting within 24 hours is counted
   down (`in 1h 32m`); further out, the date is the clearer answer (`Aug 21, 8:59pm`).
-- **The pale mark on each bar is where an even burn would have reached by now** — half the week
-  gone, half the week's allowance spent. Fill short of the mark is spare; fill past it is a
-  window that runs out before it resets. It is a mark rather than another number because the
-  comparison is the whole point, and the bar already draws it.
+- **The mark on each bar is where an even burn would have reached by now** — half the week gone,
+  half the week's allowance spent. Fill short of the mark is spare; fill past it is a window that
+  runs out before it resets.
   The mark needs to know how long the window runs. Codex reports that outright; for Claude it
   follows from which window the row is — a session is five hours, a week seven days. A row
   neither explains gets no mark rather than one placed by guesswork.
+- **Fill past the mark is drawn a shade lighter**, so the bar splits into what the clock has paid
+  for and what it has not. Being over is a bright cap on the end of the bar, and being over by
+  two points is a bright sliver — the signal scales with the overrun instead of firing at a
+  threshold somebody picked.
+- **`▲18` beside the window's name says by how much.** Up is points spent beyond the clock, down
+  is points in hand, and the arrow carries the direction without a legend or a word. `▲` is lit
+  and `▼` muted, because only one of the two is worth a second look.
+- Hue and brightness say different things and never trade places: **hue is how much is gone**
+  (green, amber, red), **brightness is whether it is going early**. A pale red cap is "nearly out
+  *and* still accelerating"; flat red with no cap is "nearly out but already slowing".
 
 ## What the icon shows
 
@@ -298,6 +312,19 @@ added:
 Colour always means severity and never identity. Accounts are told apart by position, in config
 order, which makes the panel the icon's legend. **Icon shows ▸** overrides all of this with a
 single chosen limit, one bar per account.
+
+Every bar in the icon carries the pace the same way the panel's do: a dark notch cut where the
+clock has reached, and the fill past it a shade lighter. **Anything bright to the right of a notch
+is spending run ahead of the window.** At sixteen pixels there is no room for a pale line, so the
+mark is cut dark through fill and track alike — a boundary you have to find by comparing two
+lengths is one nobody finds.
+
+The digits case gets a strip along each edge that has something to say: the session across the
+top, the week across the bottom. The bottom strip repeats the number the digits already give,
+which is the point — a figure cannot show a notch. It is left off entirely when the window's
+length is unknown and there is no notch to show.
+
+Hovering the tray icon gives the same reading in words, pace included: `default · week 62% ▲18`.
 
 An account with no honest number — signed out, failed, or every window expired — contributes no
 bar at all rather than an empty one, because an empty track reads as "none used".

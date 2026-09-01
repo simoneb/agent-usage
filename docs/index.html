@@ -35,6 +35,11 @@
     --ok-lit:   #62cb82;
     --warn-lit: #ffb02e;
     --crit-lit: #ff6b6b;
+    /* The same three lifted towards white, for the stretch of a bar past its pace mark. Hue
+       still carries severity; only the brightness says the window is being spent early. */
+    --ok-over:   #a9e2ba;
+    --warn-over: #ffd48c;
+    --crit-over: #ffaeae;
 
     --link: #0067c0;
 
@@ -215,6 +220,10 @@
   .row + .row { margin-top: 8px; }
   .row-head { display: flex; align-items: baseline; gap: 6px; height: 16px; }
   .row-label { color: #a8a8b0; font-size: 12px; }
+  /* How far ahead of the clock this window is being spent. Lit when it is ahead, since that is
+     the state worth looking twice at; muted when there is room in hand. */
+  .row-pace { color: #6e6e78; font-size: 12px; }
+  .row-pace.ahead { color: #d2d2dc; }
   .row-reset { color: #6e6e78; font-size: 12px; margin-left: auto; }
   /* Block, or the span is inline and a height does nothing to it — the same trap the fill is in. */
   .row .track { display: block; position: relative; margin-top: 4px; }
@@ -227,6 +236,14 @@
     height: 100%; border-radius: 4px;
     width: 0;
     transition: width .9s cubic-bezier(.22, .8, .28, 1), background-color .25s linear;
+  }
+  /* The stretch of fill that lies past the pace mark: spending the clock has not caught up with.
+     Sits over the fill, so the bar reads as one shape that changes shade rather than two bars. */
+  .over {
+    position: absolute; top: 0; bottom: 0;
+    width: 0; border-radius: 4px;
+    transition: width .9s cubic-bezier(.22, .8, .28, 1), left .9s cubic-bezier(.22, .8, .28, 1),
+                background-color .25s linear;
   }
   .row-pct { font-family: var(--mono); font-size: 12px; font-weight: 600; }
 
@@ -252,11 +269,16 @@
     display: block; height: 3px; border-radius: 1px;
     background: var(--slab-track); overflow: hidden;
   }
+  .badge .track { position: relative; }
   .badge .track.pair-end { margin-bottom: 3px; }
   .badge .track b {
     display: block; height: 100%; width: 0; border-radius: 1px;
     transition: width .9s cubic-bezier(.22, .8, .28, 1), background-color .25s linear;
   }
+  .badge .over { border-radius: 1px; }
+  /* At sixteen real pixels the icon has no room for a pale line, so its pace mark is cut dark
+     through fill and track alike: any colour to the right of a notch is spending run ahead. */
+  .badge .track b.notch { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--slab); }
   .taskbar-name { font-size: .8rem; color: var(--ink-soft); }
   .taskbar-progress { width: 88px; margin-left: auto; height: 3px; border-radius: 2px; background: var(--rule); overflow: hidden; }
   .taskbar-progress i { display: block; height: 100%; width: 0; transition: width .9s cubic-bezier(.22, .8, .28, 1), background-color .25s linear; }
@@ -449,18 +471,20 @@
             <div class="row">
               <div class="row-head">
                 <span class="row-label">session</span>
+                <span class="row-pace">▼54</span>
                 <span class="row-reset">in 1h 32m</span>
                 <span class="row-pct">14%</span>
               </div>
-              <span class="track"><i class="fill" data-fill="14"></i><i class="pace" style="left: 68%"></i></span>
+              <span class="track" data-fill="14" data-pace="68"><i class="fill"></i><i class="over"></i><i class="pace"></i></span>
             </div>
             <div class="row">
               <div class="row-head">
                 <span class="row-label">week</span>
+                <span class="row-pace" id="weekPace">▲32</span>
                 <span class="row-reset">in 10h 32m</span>
                 <span class="row-pct" id="weekPct">94%</span>
               </div>
-              <span class="track"><i class="fill" id="weekFill"></i><i class="pace" style="left: 62%"></i></span>
+              <span class="track" id="weekTrack" data-pace="62"><i class="fill"></i><i class="over"></i><i class="pace"></i></span>
             </div>
           </div>
 
@@ -473,18 +497,20 @@
             <div class="row">
               <div class="row-head">
                 <span class="row-label">session</span>
+                <span class="row-pace">▲16</span>
                 <span class="row-reset">in 3h 1m</span>
                 <span class="row-pct" style="color: var(--ok-lit)">56%</span>
               </div>
-              <span class="track"><i class="fill" data-fill="56"></i><i class="pace" style="left: 40%"></i></span>
+              <span class="track" data-fill="56" data-pace="40"><i class="fill"></i><i class="over"></i><i class="pace"></i></span>
             </div>
             <div class="row">
               <div class="row-head">
                 <span class="row-label">week</span>
+                <span class="row-pace">▼23</span>
                 <span class="row-reset">Aug 21, 8:59pm</span>
                 <span class="row-pct" style="color: var(--ok-lit)">5%</span>
               </div>
-              <span class="track"><i class="fill" data-fill="5"></i><i class="pace" style="left: 28%"></i></span>
+              <span class="track" data-fill="5" data-pace="28"><i class="fill"></i><i class="over"></i><i class="pace"></i></span>
             </div>
           </div>
         </div>
@@ -493,18 +519,20 @@
       <!-- Minimised, the taskbar button carries the same number. -->
       <div class="taskbar">
         <span class="badge" aria-hidden="true">
-          <i class="track"><b data-fill="14"></b></i>
-          <i class="track pair-end"><b id="badgeWeek"></b></i>
-          <i class="track"><b data-fill="56"></b></i>
-          <i class="track"><b data-fill="5"></b></i>
+          <i class="track" data-fill="14" data-pace="68"><b class="fill"></b><b class="over"></b><b class="notch"></b></i>
+          <i class="track pair-end" id="badgeWeekTrack" data-pace="62"><b class="fill"></b><b class="over"></b><b class="notch"></b></i>
+          <i class="track" data-fill="56" data-pace="40"><b class="fill"></b><b class="over"></b><b class="notch"></b></i>
+          <i class="track" data-fill="5" data-pace="28"><b class="fill"></b><b class="over"></b><b class="notch"></b></i>
         </span>
         <span class="taskbar-name">Agent Usage</span>
         <span class="taskbar-progress"><i id="taskFill"></i></span>
       </div>
 
       <p class="caption">
-        The pale mark on each bar is where an even burn would have reached by now. Fill short of
-        it is spare; fill past it is a window that runs out before it resets.
+        The mark on each bar is where an even burn would have reached by now. Fill short of it is
+        spare; the paler stretch past it is a window that runs out before it resets, and the
+        ▲ beside the label says by how many points. Colour still means how much is gone —
+        only the brightness means it is going early.
       </p>
 
       <div class="demo">
@@ -836,31 +864,66 @@ work 0% · codex 3%</pre>
 
 <script>
   (function () {
-    var slider    = document.getElementById('pct');
-    var weekFill  = document.getElementById('weekFill');
-    var weekPct   = document.getElementById('weekPct');
-    var headline  = document.getElementById('headline');
-    var badgeWeek = document.getElementById('badgeWeek');
-    var taskFill  = document.getElementById('taskFill');
-    var readout   = document.getElementById('readout');
+    var slider     = document.getElementById('pct');
+    var weekTrack  = document.getElementById('weekTrack');
+    var weekPct    = document.getElementById('weekPct');
+    var weekPace   = document.getElementById('weekPace');
+    var headline   = document.getElementById('headline');
+    var badgeTrack = document.getElementById('badgeWeekTrack');
+    var taskFill   = document.getElementById('taskFill');
+    var readout    = document.getElementById('readout');
 
     // The same three thresholds the widget itself uses.
     function state(v) {
-      if (v >= 90) return { colour: 'var(--crit-lit)', flat: 'var(--crit)', word: 'out of room' };
-      if (v >= 75) return { colour: 'var(--warn-lit)', flat: 'var(--warn)', word: 'getting close' };
-      return { colour: 'var(--ok-lit)', flat: 'var(--ok)', word: 'plenty left' };
+      if (v >= 90) return { colour: 'var(--crit-lit)', over: 'var(--crit-over)', flat: 'var(--crit)', word: 'out of room' };
+      if (v >= 75) return { colour: 'var(--warn-lit)', over: 'var(--warn-over)', flat: 'var(--warn)', word: 'getting close' };
+      return { colour: 'var(--ok-lit)', over: 'var(--ok-over)', flat: 'var(--ok)', word: 'plenty left' };
+    }
+
+    // One bar, drawn the way Renderer.DrawLimitRow and IconBuilder.DrawBar draw it: the fill in
+    // the severity colour, the stretch past the pace mark a shade lighter, the mark on top of
+    // both. A track with no data-pace has no window length behind it and gets no mark at all.
+    function paint(track, used) {
+      var s = state(used);
+      var pace = track.getAttribute('data-pace');
+
+      track.querySelector('.fill').style.width = used + '%';
+      track.querySelector('.fill').style.background = s.colour;
+
+      var over = track.querySelector('.over');
+      var mark = track.querySelector('.pace') || track.querySelector('.notch');
+
+      if (pace === null) {
+        if (over) over.style.width = '0';
+        if (mark) mark.style.display = 'none';
+        return;
+      }
+
+      if (mark) mark.style.left = pace + '%';
+
+      if (over) {
+        over.style.left = pace + '%';
+        over.style.width = Math.max(0, used - pace) + '%';
+        over.style.background = s.over;
+      }
+    }
+
+    // Up when the window is being spent ahead of its clock, down when there is room in hand.
+    function paceNote(el, track, used) {
+      var delta = used - +track.getAttribute('data-pace');
+      el.textContent = (delta > 0 ? '▲' : delta < 0 ? '▼' : '▶') + Math.abs(delta);
+      el.classList.toggle('ahead', delta > 0);
     }
 
     function render(v) {
       var s = state(v);
-      weekFill.style.width = v + '%';
-      weekFill.style.background = s.colour;
+      paint(weekTrack, v);
+      paint(badgeTrack, v);
+      paceNote(weekPace, weekTrack, v);
       weekPct.textContent = v + '%';
       weekPct.style.color = s.colour;
       headline.textContent = v + '%';
       headline.style.color = s.colour;
-      badgeWeek.style.width = v + '%';
-      badgeWeek.style.background = s.colour;
       taskFill.style.width = v + '%';
       taskFill.style.background = s.flat;
       readout.textContent = v + '% · ' + s.word;
@@ -870,14 +933,12 @@ work 0% · codex 3%</pre>
 
     // Fill from empty on load, the way the panel does on its first poll.
     // Both the panel rows and the icon's own bars.
-    var others = document.querySelectorAll('[data-fill]');
+    var others = document.querySelectorAll('.track[data-fill]');
     requestAnimationFrame(function () {
       requestAnimationFrame(function () {
         render(+slider.value);
-        others.forEach(function (el) {
-          var v = +el.getAttribute('data-fill');
-          el.style.width = v + '%';
-          el.style.background = state(v).colour;
+        others.forEach(function (track) {
+          paint(track, +track.getAttribute('data-fill'));
         });
       });
     });

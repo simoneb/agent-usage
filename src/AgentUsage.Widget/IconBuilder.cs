@@ -17,6 +17,12 @@ namespace AgentUsage.Widget;
 ///
 /// Colour always means severity and never identity; accounts are told apart by position, in
 /// config order, so the panel reads as the icon's legend.
+///
+/// Every bar also carries the pace: a dark notch where an even burn would have reached by now,
+/// and the fill past that notch a shade lighter. So the icon answers two questions at a glance
+/// rather than one — how much is gone, and whether it is going faster than it refills. Anything
+/// bright to the right of a notch is spending that the window will not have paid back by the
+/// time it resets.
 /// </summary>
 internal static class IconBuilder
 {
@@ -28,7 +34,15 @@ internal static class IconBuilder
     private static readonly uint Unknown = Rgb(0x6E, 0x6E, 0x78);
     private static readonly uint Ink = Rgb(0x12, 0x12, 0x16);
 
-    private readonly record struct Reading(int Week, int? Session);
+    /// <summary>
+    /// One window: how much of it is spent, and how much of it has gone by. <see cref="Pace"/>
+    /// is null for a window whose length the provider never states, and a bar with no pace is
+    /// drawn exactly as it was before — an unmarked bar is honest, a notch placed by guesswork
+    /// is not.
+    /// </summary>
+    private readonly record struct Gauge(int Used, int? Pace);
+
+    private readonly record struct Reading(Gauge Week, Gauge? Session);
 
     /// <param name="iconLimit">
     /// A row label fragment to report instead of the default pairing. When set, every account
@@ -42,36 +56,36 @@ internal static class IconBuilder
         var readings = new List<Reading>();
         var anyError = false;
 
+        var now = DateTimeOffset.Now;
+
         foreach (var s in statuses)
         {
             if (s.Error is not null) { anyError = true; continue; }
 
             if (iconLimit is not null)
             {
-                if (s.PercentFor(iconLimit) is int chosen)
-                    readings.Add(new Reading(Math.Clamp(chosen, 0, 100), null));
+                if (Read(s.LimitFor(iconLimit), now) is Gauge chosen)
+                    readings.Add(new Reading(chosen, null));
 
                 continue;
             }
 
-            if (s.HeadlinePercent is not int week) continue;
+            if (Read(s.HeadlineLimit, now) is not Gauge week) continue;
 
-            readings.Add(new Reading(
-                Math.Clamp(week, 0, 100),
-                s.SessionPercent is int session ? Math.Clamp(session, 0, 100) : null));
+            readings.Add(new Reading(week, Read(s.SessionLimit, now)));
         }
 
         using var surface = new DibSurface(size, size);
 
         if (readings.Count == 0)
         {
-            DrawBadge(surface.Hdc, size, Unknown, anyError ? "!" : "–", null);
+            DrawBadge(surface.Hdc, size, Unknown, anyError ? "!" : "–", null, null);
         }
         else if (readings.Count == 1)
         {
             var only = readings[0];
-            DrawBadge(surface.Hdc, size, Renderer.ColorFor(only.Week),
-                only.Week.ToString(), only.Session);
+            DrawBadge(surface.Hdc, size, Renderer.ColorFor(only.Week.Used),
+                only.Week.Used.ToString(), only.Session, only.Week);
         }
         else if (readings.Count <= MaxPairs && iconLimit is null)
         {
@@ -83,8 +97,12 @@ internal static class IconBuilder
         }
         else
         {
-            var worst = readings.Max(r => r.Week);
-            DrawBadge(surface.Hdc, size, Renderer.ColorFor(worst), worst.ToString(), null);
+            // One number for many accounts, so there is no single window behind it and no pace
+            // to mark: the worst week here and the clock it runs against belong to whichever
+            // account happens to be worst, and a notch from one bar under a figure from another
+            // would be a comparison nobody made.
+            var worst = readings.Max(r => r.Week.Used);
+            DrawBadge(surface.Hdc, size, Renderer.ColorFor(worst), worst.ToString(), null, null);
         }
 
         surface.ForceOpaque();
@@ -106,25 +124,28 @@ internal static class IconBuilder
     }
 
     /// <summary>
-    /// A solid colour block with the week percentage on it, and the session as a strip across
-    /// the top — above the digits, the way session sits above week in the panel.
+    /// A solid colour block with the week percentage on it, and a strip along each edge that has
+    /// something to say: the session across the top — above the digits, the way session sits
+    /// above week in the panel — and the week across the bottom.
+    ///
+    /// The bottom strip repeats the number the digits already give, which is the point: a figure
+    /// cannot show a notch. The strip exists to put the week's spending beside the week's clock,
+    /// so it is drawn only when there is a pace to mark and left off entirely when there is not.
     /// </summary>
-    private static void DrawBadge(IntPtr hdc, int size, uint colour, string text, int? session)
+    private static void DrawBadge(
+        IntPtr hdc, int size, uint colour, string text, Gauge? session, Gauge? week)
     {
         Fill(hdc, 0, 0, size, size, colour);
 
-        var stripHeight = 0;
+        var strip = Math.Max(2, size / 8);
 
-        if (session is int pct)
-        {
-            stripHeight = Math.Max(2, size / 8);
+        // The week strip earns its pixels only when it has a notch to carry; the session strip
+        // earns them whenever there is a session at all, since the digits say nothing about it.
+        var top = session is not null ? strip : 0;
+        var bottom = week is { Pace: not null } ? strip : 0;
 
-            Fill(hdc, 0, 0, size, stripHeight, Slab);
-
-            var filled = (int)Math.Round(size * pct / 100.0);
-            if (pct > 0) filled = Math.Max(filled, 1);
-            if (filled > 0) Fill(hdc, 0, 0, filled, stripHeight, Renderer.ColorFor(pct));
-        }
+        if (session is Gauge above) DrawBar(hdc, 0, 0, size, top, above);
+        if (week is Gauge below && bottom > 0) DrawBar(hdc, 0, size - bottom, size, size, below);
 
         SetBkMode(hdc, TRANSPARENT);
         SetTextColor(hdc, Ink);
@@ -134,8 +155,8 @@ internal static class IconBuilder
             DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0, "Segoe UI");
         var oldFont = SelectObject(hdc, font);
 
-        // Centre the digits in what is left below the strip, not in the whole square.
-        var rect = new RECT { Left = 0, Top = stripHeight, Right = size, Bottom = size };
+        // Centre the digits in what is left between the strips, not in the whole square.
+        var rect = new RECT { Left = 0, Top = top, Right = size, Bottom = size - bottom };
         DrawTextW(hdc, text, text.Length, ref rect,
             DT_SINGLELINE | DT_NOPREFIX | DT_VCENTER | 0x0001 /* DT_CENTER */);
 
@@ -203,21 +224,51 @@ internal static class IconBuilder
         return heights;
     }
 
-    private static void DrawBar(IntPtr hdc, int left, int top, int right, int bottom, int? pct)
+    private static void DrawBar(IntPtr hdc, int left, int top, int right, int bottom, Gauge? gauge)
     {
         Fill(hdc, left, top, right, bottom, Track);
 
-        if (pct is not int value) return;
+        if (gauge is not Gauge g) return;
 
-        var filled = (int)Math.Round((right - left) * value / 100.0);
+        var width = right - left;
+        var filled = (int)Math.Round(width * g.Used / 100.0);
 
         // A non-zero reading must never render as an empty track, so anything above zero keeps
         // at least one visible column.
-        if (value > 0) filled = Math.Max(filled, 1);
+        if (g.Used > 0) filled = Math.Max(filled, 1);
 
-        if (filled > 0)
-            Fill(hdc, left, top, left + filled, bottom, Renderer.ColorFor(value));
+        var colour = Renderer.ColorFor(g.Used);
+
+        if (filled > 0) Fill(hdc, left, top, left + filled, bottom, colour);
+
+        if (g.Pace is not int budget) return;
+
+        var mark = (int)Math.Round(width * budget / 100.0);
+
+        // The fill past the notch is spending the clock has not caught up with. A lighter shade
+        // of the bar's own colour, so hue still means severity and only brightness means overrun.
+        if (filled - mark >= 2)
+            Fill(hdc, left + mark, top, left + filled, bottom, Renderer.Brighten(colour));
+
+        // The notch itself, cut through fill and track alike: at tray sizes a whole bar is
+        // sixteen pixels wide, and a boundary you have to find by comparing two lengths is one
+        // nobody finds. A dark column splits the bar into "spent so far" and "spent early", and
+        // any colour on the far side of it is the second.
+        var thickness = Math.Max(1, width / 24);
+        var notch = Math.Clamp(left + mark - thickness / 2, left, right - thickness);
+
+        Fill(hdc, notch, top, notch + thickness, bottom, Slab);
     }
+
+    /// <summary>
+    /// What the icon needs from a limit row: its percentage, and how far through its window we
+    /// are. Null for a row that cannot produce a percentage at all — a count with no ceiling, or
+    /// a window that has already rolled over.
+    /// </summary>
+    private static Gauge? Read(LimitRow? row, DateTimeOffset now) =>
+        row?.Percent is int used
+            ? new Gauge(Math.Clamp(used, 0, 100), row.ElapsedPercent(now))
+            : null;
 
     private static void Fill(IntPtr hdc, int left, int top, int right, int bottom, uint colour)
     {

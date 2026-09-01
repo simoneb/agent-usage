@@ -60,7 +60,13 @@ for a tray left-click, or `WM_KEYDOWN`/`VK_ESCAPE`) drives it exactly as the she
 - `Status.cs` holds the limit model. `LimitRow.Percent` is deliberately nullable: a count with no
   ceiling, or a window that already reset (`Expired`), cannot honestly produce a proportion, and
   rendering it as `0` turns "I don't know" into "you have used none of it". Every consumer must
-  skip nulls rather than default them.
+  skip nulls rather than default them. `ElapsedPercent`/`PaceDelta` are nullable for the same
+  reason and must be skipped the same way — a window whose length nobody states has no pace, and
+  reporting that as `0` claims "exactly on track" about a thing that was never measured.
+- `AccountStatus.HeadlineLimit` and `SessionLimit` return the row, not the number. Everything
+  downstream needs more than the percentage — the pace needs the window's length and its reset —
+  and finding the row afterwards by matching a percentage back against the list picks the wrong
+  window as soon as two of them agree. `HeadlinePercent`/`SessionPercent` are thin wrappers.
 - `UsageService.ProbeAllAsync` fans out over accounts concurrently and is what both front ends
   call. Anything that should hold for widget and CLI alike belongs here, not in either front end.
 
@@ -74,6 +80,10 @@ rules them out).
 - `Renderer.cs` draws the panel into an off-screen 32bpp DIB, reused for the DWM iconic
   thumbnail and live preview — so hovering the taskbar button shows the real panel.
   `IconBuilder.cs` draws the tray/taskbar badge, whose layout changes with account count.
+  Both encode usage and pace on two separate axes and must keep them separate: **hue is severity**
+  (`Renderer.ColorFor`, thresholds at 75 and 90), **brightness is overrun** (`Renderer.Brighten`,
+  applied to the stretch of fill past the pace mark). A change that gives the overspend a hue of
+  its own makes a bar say two things at once.
   `TaskbarProgress.cs` is the taskbar progress bar, `Updates.cs` the self-replacing updater,
   `Autostart.cs` the per-user Run key. `Native.cs` is the P/Invoke surface — add constants and
   imports there, not inline.

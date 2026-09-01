@@ -53,3 +53,51 @@ public class IconBuilderTests
         return total;
     }
 }
+
+/// <summary>
+/// The pace is drawn, not written, on both the icon and the panel bars: a notch where the clock
+/// has reached, and the fill past it a shade lighter. These pin the two pieces of arithmetic
+/// behind that, since neither is visible in a test run.
+/// </summary>
+public class PaceRenderingTests
+{
+    [Fact]
+    public void OverspendIsTheSameHueLifted()
+    {
+        // Hue carries severity everywhere in this app, so the overrun shade has to stay the same
+        // colour and only get brighter — a green bar whose tip turns amber would be claiming a
+        // severity the number does not support.
+        var green = Renderer.ColorFor(40);
+        var lifted = Renderer.Brighten(green);
+
+        Assert.NotEqual(green, lifted);
+
+        for (var shift = 0; shift < 24; shift += 8)
+        {
+            var before = (green >> shift) & 0xFF;
+            var after = (lifted >> shift) & 0xFF;
+
+            Assert.True(after >= before, $"channel at bit {shift} got darker");
+        }
+    }
+
+    [Fact]
+    public void BrighteningIsBoundedByWhite()
+    {
+        var white = Renderer.Brighten(Renderer.Brighten(Renderer.Brighten(
+            Renderer.ColorFor(95), 1.0), 1.0), 1.0);
+
+        Assert.Equal(0x00FFFFFFu, white);
+    }
+
+    [Theory]
+    [InlineData(12, "▲12")]
+    [InlineData(-8, "▼8")]
+    [InlineData(0, "▶0")]
+    public void ThePaceNoteSaysItsDirectionWithoutALegend(int delta, string expected)
+    {
+        // The panel has no room to write "ahead of an even burn" on every row, and a bare signed
+        // number beside a percentage reads as part of the percentage.
+        Assert.Equal(expected, Renderer.PaceText(delta));
+    }
+}

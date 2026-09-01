@@ -37,21 +37,15 @@ public sealed class Snapshot
             };
 
             foreach (var limit in status.Limits)
-                account.Limits.Add(SnapshotLimit.From(limit));
+                account.Limits.Add(SnapshotLimit.From(limit, now));
 
-            // The one number a status bar with room for one number should show.
-            if (status.HeadlinePercent is int headline)
+            // The one window a status bar with room for one number should show. Taken as a row
+            // rather than found by matching its percentage back against the list, which picks the
+            // wrong window the moment two of them sit at the same figure.
+            if (status.HeadlineLimit is LimitRow headline && headline.Percent is int percent)
             {
-                account.HeadlinePercent = headline;
-
-                foreach (var limit in status.Limits)
-                {
-                    if (limit.Percent == headline)
-                    {
-                        account.Headline = SnapshotLimit.From(limit);
-                        break;
-                    }
-                }
+                account.HeadlinePercent = percent;
+                account.Headline = SnapshotLimit.From(headline, now);
             }
 
             snapshot.Accounts.Add(account);
@@ -122,7 +116,23 @@ public sealed class SnapshotLimit
     /// </summary>
     public double? WindowSeconds { get; set; }
 
-    public static SnapshotLimit From(LimitRow row) => new()
+    /// <summary>
+    /// How far through the window we are, 0-100. Derivable from <see cref="WindowSeconds"/> and
+    /// <see cref="ResetsAt"/>, and reported anyway so that a consumer with one line of shell does
+    /// not have to do date arithmetic to get the number the bars are drawn against.
+    /// </summary>
+    public int? ElapsedPercent { get; set; }
+
+    /// <summary>
+    /// <see cref="Percent"/> minus <see cref="ElapsedPercent"/>: +12 is twelve points ahead of
+    /// spending this window evenly, -8 that far behind. Null whenever either half is unknown,
+    /// because a delta from a missing number is not a smaller claim than the number itself.
+    /// </summary>
+    public int? PaceDelta { get; set; }
+
+    public static SnapshotLimit From(LimitRow row) => From(row, DateTimeOffset.Now);
+
+    public static SnapshotLimit From(LimitRow row, DateTimeOffset now) => new()
     {
         Label = row.Label,
         Kind = row.Kind switch
@@ -140,5 +150,7 @@ public sealed class SnapshotLimit
         Resets = row.Resets,
         ResetsAt = row.ResetsAt,
         WindowSeconds = row.Window?.TotalSeconds,
+        ElapsedPercent = row.ElapsedPercent(now),
+        PaceDelta = row.PaceDelta(now),
     };
 }

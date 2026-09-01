@@ -166,6 +166,35 @@ internal static class Renderer
         _ => Rgb(0x62, 0xCB, 0x82),
     };
 
+    /// <summary>
+    /// The same colour, lifted towards white. Used for the stretch of a bar that lies past its
+    /// pace mark — the part of the window that has been spent ahead of the clock.
+    ///
+    /// A tint rather than a colour of its own, because hue already means severity everywhere on
+    /// this panel and in the icon. Adding a second hue would give a bar two things to say at
+    /// once; a lighter shade of the one it already says reads as emphasis instead, which is
+    /// exactly what an overrun is.
+    /// </summary>
+    public static uint Brighten(uint colour, double amount = 0.45)
+    {
+        var r = (byte)(colour & 0xFF);
+        var g = (byte)((colour >> 8) & 0xFF);
+        var b = (byte)((colour >> 16) & 0xFF);
+
+        byte Lift(byte channel) => (byte)Math.Round(channel + (255 - channel) * amount);
+
+        return Rgb(Lift(r), Lift(g), Lift(b));
+    }
+
+    /// <summary>
+    /// The pace figure as a row shows it: how many points of the window have been spent beyond
+    /// where an even burn would have reached. Up means the window runs out before it resets if
+    /// nothing changes, down means there is slack — the arrow carries that without a legend, and
+    /// without spending the width a word like "ahead" would cost on every row.
+    /// </summary>
+    public static string PaceText(int delta) =>
+        delta > 0 ? $"▲{delta}" : delta < 0 ? $"▼{-delta}" : "▶0";
+
     private static int S(int v, double scale) => (int)Math.Round(v * scale);
 
     /// <summary>Height the panel needs for the given data, in physical pixels.</summary>
@@ -398,9 +427,28 @@ internal static class Renderer
 
         SelectObject(hdc, fonts.Sub);
 
-        if (ResetText(limit, now) is string resets)
+        // Two notes share the gutter between the label and the value, and they answer different
+        // questions: the pace says whether this window is being spent faster than it refills, the
+        // reset says how long until that stops mattering. Pace goes on the left, against the
+        // label, because it is the one that changes what you do next.
+        var resetLeft = noteLeft;
+
+        if (limit.PaceDelta(now) is int delta)
         {
-            DrawLine(hdc, resets, noteLeft, y, noteRight - noteLeft, textHeight,
+            var pace = PaceText(delta);
+
+            DrawLine(hdc, pace, noteLeft, y, noteRight - noteLeft, textHeight,
+                delta > 0 ? PaceColor : MutedColor, DT_LEFT | DT_VCENTER);
+
+            // Measured, so the reset stamp is clipped by the ellipsis rather than drawn over the
+            // pace on the one row where both happen to be long.
+            GetTextExtentPoint32W(hdc, pace, pace.Length, out var paceSize);
+            resetLeft += paceSize.Width + S(8, scale);
+        }
+
+        if (ResetText(limit, now) is string resets && noteRight > resetLeft)
+        {
+            DrawLine(hdc, resets, resetLeft, y, noteRight - resetLeft, textHeight,
                 MutedColor, DT_RIGHT | DT_VCENTER);
         }
 
@@ -415,7 +463,10 @@ internal static class Renderer
         // zero would read as "none used", which is a different claim entirely.
         if (percent is int value)
         {
-            var fillWidth = (int)Math.Round(contentWidth * Math.Clamp(value, 0, 100) / 100.0);
+            var used = Math.Clamp(value, 0, 100);
+            var elapsed = limit.ElapsedPercent(now);
+            var fillWidth = (int)Math.Round(contentWidth * used / 100.0);
+
             if (fillWidth > 0)
             {
                 // Keep the fill at least as wide as its own rounding, or the cap renders as a sliver.
@@ -423,15 +474,30 @@ internal static class Renderer
                 FillRoundRect(hdc, x, barTop, x + fillWidth, barTop + barHeight, color);
             }
 
+            // The stretch of fill that lies past the pace mark is the overspend: the part of this
+            // window that has gone faster than the clock. Painting it a shade lighter turns the
+            // comparison into one shape rather than two positions to measure against each other —
+            // a bright cap on the end of the bar is the whole answer, from across the room.
+            //
+            // Only drawn once it is wide enough to be a segment rather than a stray pixel. Below
+            // that it is a couple of points of overrun, which the mark alone already says.
+            if (elapsed is int budget && used > budget)
+            {
+                var budgetWidth = (int)Math.Round(contentWidth * budget / 100.0);
+
+                if (fillWidth - budgetWidth >= barHeight)
+                    FillRoundRect(hdc, x + budgetWidth, barTop, x + fillWidth, barTop + barHeight,
+                        Brighten(color));
+            }
+
             // Where an even burn would have reached by now. Fill short of this mark is spare;
-            // fill past it is a window that runs out before it resets. Drawn inside the bar and
-            // over the fill, because the comparison is the point and the row is not the place
-            // for a second number saying the same thing.
-            if (limit.ElapsedPercent(now) is int elapsed)
+            // fill past it is a window that runs out before it resets. Drawn last so it sits over
+            // both shades of fill and hides the seam between them.
+            if (elapsed is int mark)
             {
                 var thickness = Math.Max(1, S(2, scale));
-                var markLeft = x + (int)Math.Round((contentWidth - thickness) * elapsed / 100.0);
-                var mark = new RECT
+                var markLeft = x + (int)Math.Round((contentWidth - thickness) * mark / 100.0);
+                var rect = new RECT
                 {
                     Left = markLeft,
                     Top = barTop,
@@ -439,7 +505,7 @@ internal static class Renderer
                     Bottom = barTop + barHeight,
                 };
 
-                FillSolid(hdc, mark, PaceColor);
+                FillSolid(hdc, rect, PaceColor);
             }
         }
     }

@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 
 namespace AgentUsage.Cli;
@@ -78,11 +79,13 @@ internal static class TextReport
 
         var labelWidth = 0;
         var valueWidth = 0;
+        var paceWidth = 0;
 
         foreach (var limit in account.Limits)
         {
             labelWidth = Math.Max(labelWidth, Short(limit.Label).Length);
             valueWidth = Math.Max(valueWidth, limit.Display.Length);
+            paceWidth = Math.Max(paceWidth, Pace(limit).Length);
         }
 
         foreach (var limit in account.Limits)
@@ -90,12 +93,28 @@ internal static class TextReport
             var line = new StringBuilder(
                 $"  {Short(limit.Label).PadRight(labelWidth)}  {limit.Display.PadLeft(valueWidth)}");
 
+            if (paceWidth > 0) line.Append($"  {Pace(limit).PadLeft(paceWidth)}");
+
             var resets = Resets(limit, now);
             if (resets is not null) line.Append($"   resets {resets}");
 
             output.AppendLine(line.ToString());
         }
     }
+
+    /// <summary>
+    /// How far consumption has run ahead of the clock: "+12 pace" is twelve points more of this
+    /// window spent than has gone by, "-54 pace" that much in hand. Empty where the window's
+    /// length is unknown and there is no pace to state.
+    ///
+    /// Spelled in ASCII where the panel uses arrows. This goes to a terminal whose encoding is
+    /// not ours to choose, and a glyph that lands as a mojibake box costs more than the two
+    /// characters the word saves.
+    /// </summary>
+    private static string Pace(SnapshotLimit limit) =>
+        limit.PaceDelta is int delta
+            ? string.Create(CultureInfo.InvariantCulture, $"{delta:+#;-#;0} pace")
+            : string.Empty;
 
     private static string? Resets(SnapshotLimit limit, DateTimeOffset now)
     {

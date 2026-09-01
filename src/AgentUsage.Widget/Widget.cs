@@ -697,11 +697,13 @@ internal sealed class Widget : IDisposable
     }
 
     /// <summary>
-    /// The single number this account contributes to the taskbar bar and the tooltip: the
+    /// The single window this account contributes to the taskbar bar and the tooltip: the
     /// chosen limit, or the weekly headline when no choice has been made.
     /// </summary>
-    private int? MetricFor(AccountStatus status) =>
-        _config.IconLimit is string fragment ? status.PercentFor(fragment) : status.HeadlinePercent;
+    private LimitRow? MetricLimitFor(AccountStatus status) =>
+        _config.IconLimit is string fragment ? status.LimitFor(fragment) : status.HeadlineLimit;
+
+    private int? MetricFor(AccountStatus status) => MetricLimitFor(status)?.Percent;
 
     private void UpdateTaskbar()
     {
@@ -974,12 +976,25 @@ internal sealed class Widget : IDisposable
         // Name the metric, since which one the icon reports is now a choice.
         var metric = _config.IconLimit is string fragment ? MenuLabel(fragment).ToLowerInvariant() : "week";
 
+        var now = DateTimeOffset.Now;
         var parts = new List<string>();
+
         foreach (var s in statuses)
         {
-            parts.Add(s.Error is not null
-                ? $"{s.Account.Label} · {(s.LoggedIn ? "error" : "signed out")}"
-                : $"{s.Account.Label} · {metric} {MetricFor(s)}%");
+            if (s.Error is not null)
+            {
+                parts.Add($"{s.Account.Label} · {(s.LoggedIn ? "error" : "signed out")}");
+                continue;
+            }
+
+            // The pace goes in the tip because the tray icon's notch says the same thing without
+            // room to say by how much, and hovering is where you go for the "by how much".
+            var line = $"{s.Account.Label} · {metric} {MetricFor(s)}%";
+
+            if (MetricLimitFor(s)?.PaceDelta(now) is int delta)
+                line += $" {Renderer.PaceText(delta)}";
+
+            parts.Add(line);
         }
 
         var tip = string.Join("\n", parts);

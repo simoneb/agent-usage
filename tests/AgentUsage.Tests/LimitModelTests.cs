@@ -145,6 +145,31 @@ public class LimitModelTests
     }
 
     [Fact]
+    public void TheHeadlineIsTheRowItself()
+    {
+        var now = new DateTimeOffset(2026, 8, 16, 12, 0, 0, TimeSpan.Zero);
+
+        var status = new AccountStatus
+        {
+            Account = new AccountConfig { Label = "personal" },
+            Limits = new[]
+            {
+                LimitRow.Percentage("Current session", 20,
+                    resetsAt: now.AddHours(1), window: TimeSpan.FromHours(5)),
+                LimitRow.Percentage("Current week (all models)", 62,
+                    resetsAt: now.AddDays(3.5), window: TimeSpan.FromDays(7)),
+            },
+        };
+
+        // The icon draws a notch on the headline bar, which needs the window behind the number
+        // and not just the number.
+        Assert.Equal("Current week (all models)", status.HeadlineLimit?.Label);
+        Assert.Equal(62, status.HeadlinePercent);
+        Assert.Equal(12, status.HeadlineLimit?.PaceDelta(now));
+        Assert.Equal("Current session", status.SessionLimit?.Label);
+    }
+
+    [Fact]
     public void AnAccountWhoseEveryWindowExpiredHasNoHeadlineAtAll()
     {
         var status = new AccountStatus
@@ -266,5 +291,77 @@ public class SnapshotTests
 
         Assert.Contains("\"schemaVersion\": 1", json);
         Assert.Contains("\"display\": \"5%\"", json);
+    }
+
+    [Fact]
+    public void TwoWindowsAtTheSameFigureDoNotConfuseTheHeadline()
+    {
+        // The snapshot used to find the headline row by matching its percentage back against the
+        // list, which picks whichever row happens to come first once two of them agree — and two
+        // windows of one account sitting at the same figure is a coincidence, not a rarity.
+        var status = new AccountStatus
+        {
+            Account = new AccountConfig { Label = "personal" },
+            Limits = new[]
+            {
+                LimitRow.Percentage("Current session", 62),
+                LimitRow.Percentage("Current week (all models)", 62),
+            },
+        };
+
+        var account = Assert.Single(Snapshot.From(new[] { status }, DateTimeOffset.Now).Accounts);
+
+        Assert.Equal("Current week (all models)", account.Headline?.Label);
+    }
+
+    [Fact]
+    public void TheSnapshotCarriesThePaceSoConsumersNeedNoDateArithmetic()
+    {
+        var now = new DateTimeOffset(2026, 8, 16, 12, 0, 0, TimeSpan.Zero);
+
+        var status = new AccountStatus
+        {
+            Account = new AccountConfig { Label = "personal" },
+            Limits = new[]
+            {
+                LimitRow.Percentage("Current week (all models)", 62,
+                    resetsAt: now.AddDays(3.5), window: TimeSpan.FromDays(7)),
+                LimitRow.Percentage("Premium requests", 40, resetsAt: now.AddDays(2)),
+            },
+        };
+
+        var account = Assert.Single(Snapshot.From(new[] { status }, now).Accounts);
+
+        Assert.Equal(50, account.Limits[0].ElapsedPercent);
+        Assert.Equal(12, account.Limits[0].PaceDelta);
+
+        // A window whose length nobody states has no pace, and reporting one as zero would say
+        // "exactly on track" about a thing that was never measured.
+        Assert.Null(account.Limits[1].ElapsedPercent);
+        Assert.Null(account.Limits[1].PaceDelta);
+    }
+
+    [Fact]
+    public void TheSnapshotPacesEveryRowAgainstTheSameClock()
+    {
+        // Not DateTimeOffset.Now per row: a snapshot generated at one moment whose rows were each
+        // paced at a slightly later one is a report that cannot be reproduced from its own fields.
+        var now = new DateTimeOffset(2026, 8, 16, 12, 0, 0, TimeSpan.Zero);
+
+        var status = new AccountStatus
+        {
+            Account = new AccountConfig { Label = "personal" },
+            Limits = new[]
+            {
+                LimitRow.Percentage("Current week (all models)", 62,
+                    resetsAt: now.AddDays(3.5), window: TimeSpan.FromDays(7)),
+            },
+        };
+
+        // A day on, with no new spending, the same reading has fallen behind the clock.
+        var later = Assert.Single(Snapshot.From(new[] { status }, now.AddDays(1)).Accounts);
+
+        Assert.Equal(64, later.Limits[0].ElapsedPercent);
+        Assert.Equal(-2, later.Limits[0].PaceDelta);
     }
 }

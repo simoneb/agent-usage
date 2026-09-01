@@ -181,27 +181,22 @@ public sealed class AccountStatus
     /// The current session window. A different horizon from the weekly figure rather than a
     /// smaller version of it — it can sit above or below the week at any time.
     /// </summary>
-    public int? SessionPercent
+    public LimitRow? SessionLimit
     {
         get
         {
             foreach (var l in Limits)
                 if (l.Label.Contains("session", StringComparison.OrdinalIgnoreCase))
-                    return l.Percent;
+                    return l;
 
             return null;
         }
     }
 
-    /// <summary>The row whose label contains <paramref name="fragment"/>, if this account has one.</summary>
-    public int? PercentFor(string fragment)
-    {
-        foreach (var l in Limits)
-            if (l.Label.Contains(fragment, StringComparison.OrdinalIgnoreCase))
-                return l.Percent;
+    public int? SessionPercent => SessionLimit?.Percent;
 
-        return null;
-    }
+    /// <summary>The row whose label contains <paramref name="fragment"/>, if this account has one.</summary>
+    public int? PercentFor(string fragment) => LimitFor(fragment)?.Percent;
 
     /// <summary>The row whose label contains <paramref name="fragment"/>, whatever shape it is.</summary>
     public LimitRow? LimitFor(string fragment)
@@ -213,8 +208,16 @@ public sealed class AccountStatus
         return null;
     }
 
-    /// <summary>The number the taskbar shows. Prefers the all-models weekly row.</summary>
-    public int? HeadlinePercent
+    /// <summary>
+    /// The window the taskbar and the icon report. Prefers the all-models weekly row.
+    ///
+    /// The row rather than the number, because everything downstream of the headline wants more
+    /// than the percentage: the pace needs the window's length and its reset, and the JSON
+    /// snapshot needs the label. Finding the row by matching a percentage back to it — which is
+    /// what the snapshot used to do — picks the wrong one the moment two windows sit at the same
+    /// figure, which for two windows of the same account is not a rare coincidence.
+    /// </summary>
+    public LimitRow? HeadlineLimit
     {
         get
         {
@@ -222,26 +225,30 @@ public sealed class AccountStatus
             {
                 if (l.Label.Contains("week", StringComparison.OrdinalIgnoreCase) &&
                     l.Label.Contains("all models", StringComparison.OrdinalIgnoreCase))
-                    return l.Percent;
+                    return l;
             }
 
-            int? best = null;
+            LimitRow? best = null;
             foreach (var l in Limits)
             {
                 if (l.Label.Contains("week", StringComparison.OrdinalIgnoreCase))
-                    best = Larger(best, l.Percent);
+                    best = Larger(best, l);
             }
 
             if (best is not null) return best;
 
             // Nothing weekly: the worst window this account has. Rows that cannot produce a
             // percentage are skipped rather than counted as zero.
-            foreach (var l in Limits) best = Larger(best, l.Percent);
+            foreach (var l in Limits) best = Larger(best, l);
 
             return best;
         }
     }
 
-    private static int? Larger(int? current, int? candidate) =>
-        candidate is null ? current : current is null ? candidate : Math.Max(current.Value, candidate.Value);
+    public int? HeadlinePercent => HeadlineLimit?.Percent;
+
+    private static LimitRow? Larger(LimitRow? current, LimitRow? candidate) =>
+        candidate?.Percent is not int c ? current
+        : current?.Percent is not int p ? candidate
+        : c > p ? candidate : current;
 }
