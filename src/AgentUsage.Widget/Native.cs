@@ -29,6 +29,12 @@ internal static class Native
     /// <summary>An update attempt finishing, with its <c>InstallResult</c> in wParam.</summary>
     public const uint WM_APP_UPDATE_DONE = 0x8004;
 
+    /// <summary>A second launch asking the running instance to bring its panel forward.</summary>
+    public const uint WM_APP_SHOW = 0x8005;
+
+    /// <summary><c>AllowSetForegroundWindow</c>'s "any process", for handing focus rights on.</summary>
+    public const uint ASFW_ANY = unchecked((uint)-1);
+
     public const uint WM_SETCURSOR = 0x0020;
 
     public const uint WM_MOUSEMOVE = 0x0200;
@@ -241,6 +247,12 @@ internal static class Native
 
     [DllImport("user32.dll")]
     public static extern bool SetForegroundWindow(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    public static extern bool AllowSetForegroundWindow(uint dwProcessId);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    public static extern uint RegisterWindowMessageW(string lpString);
 
     [DllImport("user32.dll")]
     public static extern int GetSystemMetrics(int index);

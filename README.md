@@ -257,6 +257,10 @@ config, and session history all live there. A fresh profile starts empty.
 - **Close button** hides the panel to the tray. It does not exit.
 - **Clicking the tray icon** brings the panel back, whether it was hidden or minimised, and
   hides it again only when it is already in front of you.
+- **Launching it again** — from the Start menu, say — while it is already running brings the
+  existing panel to the front instead of starting a second copy.
+- **If Explorer restarts**, the tray icon comes back on its own; the widget listens for the
+  shell's `TaskbarCreated` broadcast and re-adds it.
 - **Exit** lives in the tray icon's right-click menu, and in the panel's own right-click menu.
 - **Drag anywhere** else on the panel to move it. Position is saved.
 - **Double-click** to refresh immediately.

@@ -14,8 +14,9 @@ namespace AgentUsage.Widget;
 /// </summary>
 internal sealed class Widget : IDisposable
 {
-    private const string ClassName = "AgentUsageWidgetWindow";
+    internal const string ClassName = "AgentUsageWidgetWindow";
     private static Widget? _instance;
+    private static readonly uint _taskbarCreated = RegisterWindowMessageW("TaskbarCreated");
 
     private const int IdRefresh = 1;
     private const int IdAlwaysOnTop = 2;
@@ -178,6 +179,17 @@ internal sealed class Widget : IDisposable
 
     private IntPtr WndProc(IntPtr hwnd, uint msg, IntPtr wParam, IntPtr lParam)
     {
+        // Explorer broadcasts this when it starts again after a crash or a restart, and every
+        // tray icon it held is gone by then. Without re-adding ours the widget keeps running
+        // with no way in: no icon, the panel hidden, and a second launch only finding the mutex.
+        // A registered message has no fixed value, so it cannot be a case below.
+        if (msg == _taskbarCreated && msg != 0)
+        {
+            _trayAdded = false;
+            AddTray();
+            return IntPtr.Zero;
+        }
+
         switch (msg)
         {
             case WM_PAINT:
@@ -304,6 +316,10 @@ internal sealed class Widget : IDisposable
 
             case WM_APP_UPDATE_DONE:
                 OnUpdateFinished((InstallResult)(int)wParam.ToInt64());
+                return IntPtr.Zero;
+
+            case WM_APP_SHOW:
+                ShowPanel();
                 return IntPtr.Zero;
 
             case WM_EXITSIZEMOVE:
